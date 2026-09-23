@@ -7,6 +7,7 @@ THREADS := -pthread
 
 CFLAGS ?= $(CSTD) $(WARN) $(OPT) $(INCLUDES) $(THREADS)
 LDFLAGS ?= $(THREADS)
+LDLIBS ?= -lsqlite3
 
 SRC := $(wildcard src/*.c)
 OBJ := $(patsubst src/%.c,build/%.o,$(SRC))
@@ -17,11 +18,17 @@ TEST_SRC := $(wildcard tests/*.c)
 # We link server objects (except main.o) + one test main at a time via explicit rules below.
 SERVER_OBJ_NO_MAIN := $(filter-out build/main.o,$(OBJ))
 TEST_BIN := build/test_server
+TEST_API_BIN := build/test_api
 
 PREFIX ?= /usr/local
 BINDIR := $(PREFIX)/bin
 
-.PHONY: all clean test sanitize format-check install help
+RUN_BIND ?= 127.0.0.1
+RUN_PORT ?= 8080
+RUN_THREADS ?= 8
+RUN_DB ?= ./data/app.db
+
+.PHONY: all clean test sanitize format-check install help run
 
 all: $(BIN)
 
@@ -29,7 +36,7 @@ build/%.o: src/%.c | build
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(BIN): $(OBJ)
-	$(CC) $(CFLAGS) $(OBJ) -o $@ $(LDFLAGS)
+	$(CC) $(CFLAGS) $(OBJ) -o $@ $(LDFLAGS) $(LDLIBS)
 
 build:
 	mkdir -p build
@@ -37,19 +44,24 @@ build:
 clean:
 	rm -rf build
 
-# Unit + integration tests (C, no external deps).
-test: $(TEST_BIN)
+# Unit + integration tests (C, sqlite linked).
+test: $(TEST_BIN) $(TEST_API_BIN)
 	./$(TEST_BIN)
+	@if [ -x ./$(TEST_API_BIN) ]; then ./$(TEST_API_BIN); fi
 
 $(TEST_BIN): $(SERVER_OBJ_NO_MAIN) tests/test_server.c | build
-	$(CC) $(CFLAGS) $(SERVER_OBJ_NO_MAIN) tests/test_server.c -o $@ $(LDFLAGS)
+	$(CC) $(CFLAGS) $(SERVER_OBJ_NO_MAIN) tests/test_server.c -o $@ $(LDFLAGS) $(LDLIBS)
+
+$(TEST_API_BIN): $(SERVER_OBJ_NO_MAIN) tests/test_api.c | build
+	$(CC) $(CFLAGS) $(SERVER_OBJ_NO_MAIN) tests/test_api.c -o $@ $(LDFLAGS) $(LDLIBS)
 
 # ASan+UBSan build + run. Fails on leak/UB. Threading is exercised here as well.
 sanitize:
 	$(MAKE) clean
-	$(MAKE) $(BIN) $(TEST_BIN) CFLAGS="$(CFLAGS) -fsanitize=address,undefined -fno-omit-frame-pointer" LDFLAGS="$(LDFLAGS) -fsanitize=address,undefined"
+	$(MAKE) $(BIN) $(TEST_BIN) $(TEST_API_BIN) CFLAGS="$(CFLAGS) -fsanitize=address,undefined -fno-omit-frame-pointer" LDFLAGS="$(LDFLAGS) -fsanitize=address,undefined"
 	./$(TEST_BIN)
-	@echo "[sanitize] test_server passed under ASan+UBSan"
+	@if [ -x ./$(TEST_API_BIN) ]; then ./$(TEST_API_BIN); fi
+	@echo "[sanitize] tests passed under ASan+UBSan"
 
 format-check:
 	@if command -v clang-format >/dev/null 2>&1; then \
@@ -62,5 +74,12 @@ install: $(BIN)
 	install -d $(DESTDIR)$(BINDIR)
 	install -m 755 $(BIN) $(DESTDIR)$(BINDIR)/c-echo-server
 
+# Run everything: build + start server with sane defaults.
+# Overrides: make run RUN_PORT=8081 RUN_DB=./data/dev.db
+run: $(BIN)
+	mkdir -p $(dir $(RUN_DB))
+	./$(BIN) --bind $(RUN_BIND) --port $(RUN_PORT) --threads $(RUN_THREADS) --db $(RUN_DB)
+
 help:
-	@echo "Targets: all | test | sanitize | format-check | clean | install"
+	@echo "Targets: all | test | sanitize | format-check | clean | install | run"
+	@echo "  make run [RUN_BIND=.. RUN_PORT=.. RUN_THREADS=.. RUN_DB=..]"
