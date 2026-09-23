@@ -524,6 +524,22 @@ static int test_api_unknown_route_and_echo(void) {
     return 0;
 }
 
+static int test_api_root_serves_html(void) {
+    TestServer ts;
+    memset(&ts, 0, sizeof(ts));
+    EXPECT_TRUE(test_server_start(&ts, 18115) == 0);
+    char resp[32768];
+    EXPECT_TRUE(http_call(18115, "GET / HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n", resp, sizeof(resp)) == 0);
+    EXPECT_TRUE(strstr(resp, "200 OK") != NULL);
+    EXPECT_TRUE(strstr(resp, "text/html") != NULL);
+    EXPECT_TRUE(strstr(resp, "C API Server") != NULL);
+    EXPECT_TRUE(http_call(18115, "POST / HTTP/1.1\r\nHost: x\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                          resp, sizeof(resp)) == 0);
+    EXPECT_TRUE(strstr(resp, "405") != NULL);
+    EXPECT_TRUE(test_server_stop(&ts) == 0);
+    return 0;
+}
+
 typedef struct {
     uint16_t port;
     int index;
@@ -589,6 +605,7 @@ int main(void) {
     RUN_TEST(test_api_kv_errors_specific);
     RUN_TEST(test_api_notes_crud);
     RUN_TEST(test_api_unknown_route_and_echo);
+    RUN_TEST(test_api_root_serves_html);
     RUN_TEST(test_api_concurrent_puts_all_succeed);
     printf("\n%d passed, %d failed\n", g_passed, g_failed);
     return g_failed == 0 ? 0 : 1;

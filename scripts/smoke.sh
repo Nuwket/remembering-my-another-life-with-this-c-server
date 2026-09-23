@@ -40,6 +40,12 @@ s, b = call("GET", "/health")
 assert s == 200 and '"ok"' in b, (s, b)
 print("smoke health OK")
 
+with urllib.request.urlopen(base + "/", timeout=5) as r:
+    ctype = r.headers.get("Content-Type", "")
+    html = r.read().decode()
+    assert r.status == 200 and "text/html" in ctype and "C API Server" in html, (r.status, ctype)
+print("smoke frontend OK")
+
 s, b = call("PUT", "/api/kv/smoke", {"value": "dark"})
 assert s == 200 and "dark" in b, (s, b)
 s, b = call("GET", "/api/kv/smoke")
