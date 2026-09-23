@@ -19,9 +19,11 @@ static Server *g_server = NULL;
 
 static void print_usage(const char *program) {
     fprintf(stderr,
-            "Usage: %s [--bind IP] [--port PORT] [--threads N] [--db PATH]\n"
-            "Env: BIND_IP, PORT, THREADS, DB_PATH (CLI overrides env)\n"
-            "Defaults: bind=0.0.0.0 port=8080 threads=8 db=./data/app.db\n",
+            "Usage: %s [--bind IP] [--port PORT] [--threads N] [--db PATH] [--api-key KEY]\n"
+            "Env: BIND_IP, PORT, THREADS, DB_PATH, API_KEY (CLI overrides env)\n"
+            "Defaults: bind=0.0.0.0 port=8080 threads=8 db=./data/app.db api-key=(open mode)\n"
+            "Auth: with --api-key set, PUT/POST/DELETE under /api/ require X-API-Key\n"
+            "      (missing -> 401, wrong -> 403). Without it the server is open.\n",
             program);
 }
 
@@ -96,6 +98,7 @@ int main(int argc, char *argv[]) {
     const char *port_text = getenv("PORT");
     const char *threads_text = getenv("THREADS");
     const char *db_path = getenv("DB_PATH");
+    const char *api_key = getenv("API_KEY");
 
     if (bind_ip == NULL || bind_ip[0] == '\0') {
         bind_ip = "0.0.0.0";
@@ -136,6 +139,8 @@ int main(int argc, char *argv[]) {
                 print_usage(argv[0]);
                 return 2;
             }
+        } else if ((strcmp(argv[i], "--api-key") == 0) && i + 1 < argc) {
+            api_key = argv[++i];
         } else if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
             print_usage(argv[0]);
             return 0;
@@ -153,6 +158,12 @@ int main(int argc, char *argv[]) {
         return 2;
     }
 
+    /* API key is optional; when present it must fit the fixed field. */
+    if (api_key != NULL && api_key[0] != '\0' && strlen(api_key) >= HTTP_MAX_API_KEY_LEN) {
+        fprintf(stderr, "error: --api-key too long (max %d chars)\n", HTTP_MAX_API_KEY_LEN - 1);
+        return 2;
+    }
+
     ServerConfig config = {
         .bind_ip = bind_ip,
         .port = port,
@@ -160,6 +171,7 @@ int main(int argc, char *argv[]) {
         .backlog = SERVER_DEFAULT_BACKLOG,
         .queue_size = SERVER_DEFAULT_QUEUE_SIZE,
         .db_path = db_path,
+        .api_key = api_key,
     };
     if (ensure_db_dir(db_path) != 0) {
         fprintf(stderr, "error: cannot create db directory for: %s\n", db_path);
@@ -183,6 +195,7 @@ int main(int argc, char *argv[]) {
 
     /* Pretty console banner with clickable shortcut links (stdout, flushed). */
     const char *link_host = strcmp(bind_ip, "0.0.0.0") == 0 ? "127.0.0.1" : bind_ip;
+    const char *auth_mode = (api_key != NULL && api_key[0] != '\0') ? "protected (X-API-Key)" : "open (no key)";
     printf("\n"
            "  ==============================================================\n"
            "   C API Server v%s running\n"
@@ -194,10 +207,11 @@ int main(int argc, char *argv[]) {
            "   Notes:    http://%s:%u/api/notes?limit=50\n"
            "  --------------------------------------------------------------\n"
            "   bind=%s threads=%d db=%s\n"
+           "   Auth: %s\n"
            "   Stop: Ctrl-C\n"
            "  ==============================================================\n\n",
            SERVER_VERSION, link_host, (unsigned)port, link_host, (unsigned)port, link_host, (unsigned)port,
-           link_host, (unsigned)port, link_host, (unsigned)port, bind_ip, threads, db_path);
+           link_host, (unsigned)port, link_host, (unsigned)port, bind_ip, threads, db_path, auth_mode);
     fflush(stdout);
 
     char startup[256];

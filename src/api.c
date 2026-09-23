@@ -119,9 +119,10 @@ static ApiError parse_note_id(const char *path, long *id_out) {
 
 static ApiError handle_health(int fd, Server *server) {
     long uptime = server_uptime_s(server);
+    const char *auth = server_auth_enabled(server) ? "protected" : "open";
     char body[256];
-    int written =
-        snprintf(body, sizeof(body), "{\"status\":\"ok\",\"version\":\"%s\",\"uptime_s\":%ld}", SERVER_VERSION, uptime);
+    int written = snprintf(body, sizeof(body), "{\"status\":\"ok\",\"version\":\"%s\",\"uptime_s\":%ld,\"auth\":\"%s\"}",
+                           SERVER_VERSION, uptime, auth);
     if (written < 0 || (size_t)written >= sizeof(body)) {
         http_respond_error(fd, API_ERR_INTERNAL, "encode overflow");
         return API_ERR_INTERNAL;
@@ -487,6 +488,16 @@ ApiError api_dispatch(int fd, const HttpRequest *req, Store *store, Server *serv
             return API_ERR_METHOD_NOT_ALLOWED;
         }
         return handle_root(fd);
+    }
+    /* Writes under /api/ require X-API-Key when the server runs protected.
+     * Reads stay public. Missing key -> 401, wrong key -> 403, explicitly. */
+    if (req->method != HTTP_GET && strncmp(req->path, "/api/", 5) == 0) {
+        ApiError auth = server_auth_check(server, req);
+        if (auth != API_OK) {
+            http_respond_error(fd, auth,
+                               auth == API_ERR_UNAUTHORIZED ? "missing X-API-Key header" : "invalid API key");
+            return auth;
+        }
     }
     if (strcmp(req->path, "/health") == 0) {
         if (req->method != HTTP_GET) {

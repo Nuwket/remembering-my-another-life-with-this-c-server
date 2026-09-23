@@ -60,6 +60,7 @@ struct Server {
     struct ServerStats stats;
     Store *store;
     time_t start_time;
+    char api_key[HTTP_MAX_API_KEY_LEN];
 };
 
 static void stats_bump(atomic_ulong *counter) {
@@ -179,6 +180,10 @@ bool server_config_validate(const ServerConfig *config) {
         return false;
     }
     if (config->db_path == NULL || config->db_path[0] == '\0') {
+        errno = EINVAL;
+        return false;
+    }
+    if (config->api_key != NULL && strlen(config->api_key) >= HTTP_MAX_API_KEY_LEN) {
         errno = EINVAL;
         return false;
     }
@@ -346,6 +351,11 @@ Server *server_create(const ServerConfig *config) {
     atomic_init(&server->stats.http_requests, 0UL);
     atomic_init(&server->stats.http_errors, 0UL);
     server->start_time = time(NULL);
+    if (config->api_key != NULL) {
+        snprintf(server->api_key, sizeof(server->api_key), "%s", config->api_key);
+    } else {
+        server->api_key[0] = '\0';
+    }
     if (queue_init(&server->queue, config->queue_size) != 0) {
         free(server);
         return NULL;
@@ -414,6 +424,40 @@ long server_uptime_s(Server *server) {
         return 0;
     }
     return (long)(now - server->start_time);
+}
+
+int server_auth_enabled(Server *server) {
+    if (server == NULL) {
+        return 0;
+    }
+    return server->api_key[0] != '\0' ? 1 : 0;
+}
+
+/* Constant-time compare: no early exit on first mismatch. */
+static int key_matches(const char *expected, const char *provided) {
+    size_t expected_len = strlen(expected);
+    size_t provided_len = strlen(provided);
+    size_t width = expected_len > provided_len ? expected_len : provided_len;
+    unsigned int diff = (unsigned int)(expected_len ^ provided_len);
+    for (size_t i = 0; i < width; i++) {
+        char exp = i < expected_len ? expected[i] : 0;
+        char got = i < provided_len ? provided[i] : 0;
+        diff |= (unsigned int)(exp ^ got);
+    }
+    return diff == 0 ? 1 : 0;
+}
+
+ApiError server_auth_check(Server *server, const HttpRequest *req) {
+    if (server == NULL || req == NULL) {
+        return API_ERR_INTERNAL;
+    }
+    if (!server_auth_enabled(server)) {
+        return API_OK;
+    }
+    if (req->api_key[0] == '\0') {
+        return API_ERR_UNAUTHORIZED;
+    }
+    return key_matches(server->api_key, req->api_key) ? API_OK : API_ERR_FORBIDDEN;
 }
 
 int server_run(Server *server) {

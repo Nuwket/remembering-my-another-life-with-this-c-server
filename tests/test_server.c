@@ -91,6 +91,18 @@ static int test_config_validate_missing_db_returns_false(void) {
     return 0;
 }
 
+static int test_config_validate_long_api_key_returns_false(void) {
+    ServerConfig config = valid_config(18080);
+    static char long_key[300];
+    memset(long_key, 'x', sizeof(long_key) - 1);
+    long_key[sizeof(long_key) - 1] = '\0';
+    config.api_key = long_key;
+    EXPECT_TRUE(!server_config_validate(&config));
+    config.api_key = "ok-key";
+    EXPECT_TRUE(server_config_validate(&config));
+    return 0;
+}
+
 static int test_config_validate_zero_port_returns_false(void) {
     ServerConfig config = valid_config(0);
     EXPECT_TRUE(!server_config_validate(&config));
@@ -452,6 +464,7 @@ static int test_http_concurrent_clients_all_succeed(void) {
 int main(void) {
     RUN_TEST(test_config_validate_null_returns_false);
     RUN_TEST(test_config_validate_missing_db_returns_false);
+    RUN_TEST(test_config_validate_long_api_key_returns_false);
     RUN_TEST(test_config_validate_zero_port_returns_false);
     RUN_TEST(test_config_validate_bad_threads_returns_false);
     RUN_TEST(test_config_validate_bad_queue_returns_false);

@@ -7,6 +7,7 @@
 #define HTTP_MAX_BODY_SIZE 65536
 #define HTTP_MAX_PATH_LEN 2048
 #define HTTP_MAX_METHOD_LEN 8
+#define HTTP_MAX_API_KEY_LEN 256
 
 /* Typed API errors. Every failure maps to exactly one value; no silent fallback.
  * api_error_status() is total: unknown values map to 500 explicitly. */
@@ -23,6 +24,8 @@ typedef enum {
     API_ERR_LENGTH_REQUIRED,
     API_ERR_PAYLOAD_TOO_LARGE,
     API_ERR_UNSUPPORTED_MEDIA,
+    API_ERR_UNAUTHORIZED,
+    API_ERR_FORBIDDEN,
     API_ERR_NOT_IMPLEMENTED,
     API_ERR_INTERNAL
 } ApiError;
@@ -42,6 +45,7 @@ typedef struct {
     char query[HTTP_MAX_PATH_LEN]; /* empty string when absent */
     long content_length; /* -1 when header absent */
     char content_type[128];
+    char api_key[HTTP_MAX_API_KEY_LEN]; /* X-API-Key value, "" when absent */
     int has_chunked; /* 1 when Transfer-Encoding: chunked detected */
     const char *body; /* points into caller-owned buffer, may be NULL */
     size_t body_len;

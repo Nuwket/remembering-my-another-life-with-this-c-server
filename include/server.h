@@ -7,6 +7,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "http.h"
+
 #define SERVER_DEFAULT_PORT 8080
 #define SERVER_DEFAULT_THREADS 8
 #define SERVER_DEFAULT_BACKLOG 64
@@ -27,6 +29,7 @@ typedef struct {
     int backlog;      /* listen(2) backlog */
     int queue_size;   /* bounded pending-connection queue */
     const char *db_path; /* SQLite file, e.g. "./data/app.db". Required, caller owns. */
+    const char *api_key; /* NULL/"" = open mode. Otherwise X-API-Key required for writes. Caller owns. */
 } ServerConfig;
 
 typedef struct Server Server;
@@ -99,5 +102,20 @@ int server_send_all(int fd, const void *buf, size_t len);
  * @server: instance (thread-safe). Returns: >= 0, or 0 when NULL.
  */
 long server_uptime_s(Server *server);
+
+/*
+ * server_auth_enabled - 1 when an API key is configured (protected mode).
+ * @server: instance (thread-safe, read-only after create).
+ */
+int server_auth_enabled(Server *server);
+
+/*
+ * server_auth_check - Validate X-API-Key for a mutating request.
+ * @server: instance (thread-safe). @req: parsed request with api_key field.
+ * Returns: API_OK (open mode, or key matches with constant-time compare),
+ *   API_ERR_UNAUTHORIZED (header missing/empty), API_ERR_FORBIDDEN (mismatch),
+ *   API_ERR_INTERNAL (NULL args). Never falls back to OK on mismatch.
+ */
+ApiError server_auth_check(Server *server, const HttpRequest *req);
 
 #endif

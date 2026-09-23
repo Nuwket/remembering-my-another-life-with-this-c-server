@@ -68,6 +68,8 @@ static int test_error_status_mapping_correct(void) {
     EXPECT_STATUS(API_ERR_LENGTH_REQUIRED, 411);
     EXPECT_STATUS(API_ERR_PAYLOAD_TOO_LARGE, 413);
     EXPECT_STATUS(API_ERR_UNSUPPORTED_MEDIA, 415);
+    EXPECT_STATUS(API_ERR_UNAUTHORIZED, 401);
+    EXPECT_STATUS(API_ERR_FORBIDDEN, 403);
     EXPECT_STATUS(API_ERR_NOT_IMPLEMENTED, 501);
     EXPECT_STATUS(API_ERR_INTERNAL, 500);
     EXPECT_STATUS((ApiError)9999, 500); /* unknown never falls back to 200 */
@@ -120,6 +122,17 @@ static int test_http_parse_garbage_is_400(void) {
     EXPECT_STATUS(http_parse_request("GARBAGE\r\n\r\n", 11, &req), 400);
     EXPECT_STATUS(http_parse_request("", 0, &req), 400);
     EXPECT_STATUS(http_parse_request("GET nope HTTP/1.1\r\n\r\n", 21, &req), 400);
+    return 0;
+}
+
+static int test_http_parse_api_key_header_captured(void) {
+    const char *raw = "PUT /api/kv/k HTTP/1.1\r\nHost: x\r\nX-API-Key: s3cret\r\nContent-Length: 0\r\n\r\n";
+    HttpRequest req;
+    EXPECT_TRUE(http_parse_request(raw, strlen(raw), &req) == API_OK);
+    EXPECT_TRUE(strcmp(req.api_key, "s3cret") == 0);
+    const char *nokey = "GET /health HTTP/1.1\r\nHost: x\r\n\r\n";
+    EXPECT_TRUE(http_parse_request(nokey, strlen(nokey), &req) == API_OK);
+    EXPECT_TRUE(req.api_key[0] == '\0');
     return 0;
 }
 
@@ -349,7 +362,13 @@ typedef struct {
     char db[256];
 } TestServer;
 
+static int test_server_start_key(TestServer *ts, uint16_t port, const char *api_key);
+
 static int test_server_start(TestServer *ts, uint16_t port) {
+    return test_server_start_key(ts, port, NULL);
+}
+
+static int test_server_start_key(TestServer *ts, uint16_t port, const char *api_key) {
     make_db_path(ts->db, sizeof(ts->db));
     ServerConfig config;
     memset(&config, 0, sizeof(config));
@@ -359,6 +378,7 @@ static int test_server_start(TestServer *ts, uint16_t port) {
     config.backlog = 16;
     config.queue_size = 16;
     config.db_path = ts->db;
+    config.api_key = api_key;
     ts->server = server_create(&config);
     if (ts->server == NULL) {
         return -1;
@@ -403,6 +423,7 @@ static int test_api_health_and_metrics(void) {
     EXPECT_TRUE(http_call(18110, "GET /health HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n", resp,
                           sizeof(resp)) == 0);
     EXPECT_TRUE(strstr(resp, "200 OK") != NULL && strstr(resp, "\"uptime_s\"") != NULL);
+    EXPECT_TRUE(strstr(resp, "\"open\"") != NULL);
     EXPECT_TRUE(http_call(18110, "GET /metrics HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n", resp,
                           sizeof(resp)) == 0);
     EXPECT_TRUE(strstr(resp, "200 OK") != NULL && strstr(resp, "\"kv_count\"") != NULL);
@@ -450,6 +471,54 @@ static int test_api_kv_errors_specific(void) {
     EXPECT_TRUE(http_call(18111, "GET /api/kv?limit=999 HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n", resp,
                           sizeof(resp)) == 0);
     EXPECT_TRUE(strstr(resp, "400") != NULL);
+    EXPECT_TRUE(test_server_stop(&ts) == 0);
+    return 0;
+}
+
+static int test_auth_protected_mode_401_403_200(void) {
+    TestServer ts;
+    memset(&ts, 0, sizeof(ts));
+    EXPECT_TRUE(test_server_start_key(&ts, 18116, "s3cret-play") == 0);
+    char resp[8192];
+    /* Health stays public and reports the mode honestly. */
+    EXPECT_TRUE(http_call(18116, "GET /health HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n", resp,
+                          sizeof(resp)) == 0);
+    EXPECT_TRUE(strstr(resp, "200 OK") != NULL && strstr(resp, "\"protected\"") != NULL);
+    /* Reads stay public even in protected mode. */
+    EXPECT_TRUE(http_call(18116, "GET /api/kv/nope HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n", resp,
+                          sizeof(resp)) == 0);
+    EXPECT_TRUE(strstr(resp, "404") != NULL);
+    const char *body = "{\"value\":\"v\"}";
+    char req[1024];
+    /* PUT without key -> 401 unauthorized. */
+    snprintf(req, sizeof(req),
+             "PUT /api/kv/k1 HTTP/1.1\r\nHost: x\r\nContent-Type: application/json\r\nContent-Length: %zu\r\n"
+             "Connection: close\r\n\r\n%s",
+             strlen(body), body);
+    EXPECT_TRUE(http_call(18116, req, resp, sizeof(resp)) == 0);
+    EXPECT_TRUE(strstr(resp, "401") != NULL && strstr(resp, "unauthorized") != NULL);
+    /* PUT with wrong key -> 403 forbidden. */
+    snprintf(req, sizeof(req),
+             "PUT /api/kv/k1 HTTP/1.1\r\nHost: x\r\nContent-Type: application/json\r\nX-API-Key: wrong\r\n"
+             "Content-Length: %zu\r\nConnection: close\r\n\r\n%s",
+             strlen(body), body);
+    EXPECT_TRUE(http_call(18116, req, resp, sizeof(resp)) == 0);
+    EXPECT_TRUE(strstr(resp, "403") != NULL && strstr(resp, "forbidden") != NULL);
+    /* PUT with the right key -> 200. */
+    snprintf(req, sizeof(req),
+             "PUT /api/kv/k1 HTTP/1.1\r\nHost: x\r\nContent-Type: application/json\r\nX-API-Key: s3cret-play\r\n"
+             "Content-Length: %zu\r\nConnection: close\r\n\r\n%s",
+             strlen(body), body);
+    EXPECT_TRUE(http_call(18116, req, resp, sizeof(resp)) == 0);
+    EXPECT_TRUE(strstr(resp, "200 OK") != NULL);
+    /* POST notes without key -> 401 as well. */
+    const char *note = "{\"title\":\"t\",\"body\":\"b\"}";
+    snprintf(req, sizeof(req),
+             "POST /api/notes HTTP/1.1\r\nHost: x\r\nContent-Type: application/json\r\nContent-Length: %zu\r\n"
+             "Connection: close\r\n\r\n%s",
+             strlen(note), note);
+    EXPECT_TRUE(http_call(18116, req, resp, sizeof(resp)) == 0);
+    EXPECT_TRUE(strstr(resp, "401") != NULL);
     EXPECT_TRUE(test_server_stop(&ts) == 0);
     return 0;
 }
@@ -592,6 +661,7 @@ int main(void) {
     RUN_TEST(test_http_parse_query_split_ok);
     RUN_TEST(test_http_parse_unknown_method_is_405);
     RUN_TEST(test_http_parse_chunked_is_501);
+    RUN_TEST(test_http_parse_api_key_header_captured);
     RUN_TEST(test_http_parse_garbage_is_400);
     RUN_TEST(test_json_escape_ok);
     RUN_TEST(test_json_escape_overflow_is_error);
@@ -603,6 +673,7 @@ int main(void) {
     RUN_TEST(test_store_validation_specific);
     RUN_TEST(test_api_health_and_metrics);
     RUN_TEST(test_api_kv_errors_specific);
+    RUN_TEST(test_auth_protected_mode_401_403_200);
     RUN_TEST(test_api_notes_crud);
     RUN_TEST(test_api_unknown_route_and_echo);
     RUN_TEST(test_api_root_serves_html);

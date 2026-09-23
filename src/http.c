@@ -38,6 +38,10 @@ int api_error_status(ApiError err) {
         return 413;
     case API_ERR_UNSUPPORTED_MEDIA:
         return 415;
+    case API_ERR_UNAUTHORIZED:
+        return 401;
+    case API_ERR_FORBIDDEN:
+        return 403;
     case API_ERR_NOT_IMPLEMENTED:
         return 501;
     case API_ERR_INTERNAL:
@@ -70,6 +74,10 @@ const char *api_error_code(ApiError err) {
         return "payload_too_large";
     case API_ERR_UNSUPPORTED_MEDIA:
         return "unsupported_media_type";
+    case API_ERR_UNAUTHORIZED:
+        return "unauthorized";
+    case API_ERR_FORBIDDEN:
+        return "forbidden";
     case API_ERR_NOT_IMPLEMENTED:
         return "not_implemented";
     case API_ERR_INTERNAL:
@@ -104,6 +112,10 @@ static const char *reason_for(int status) {
         return "No Content";
     case 400:
         return "Bad Request";
+    case 401:
+        return "Unauthorized";
+    case 403:
+        return "Forbidden";
     case 404:
         return "Not Found";
     case 405:
@@ -199,6 +211,8 @@ static ApiError parse_header_line(const char *line, HttpRequest *out) {
         out->content_length = parsed;
     } else if (strcmp(name, "content-type") == 0) {
         snprintf(out->content_type, sizeof(out->content_type), "%s", value);
+    } else if (strcmp(name, "x-api-key") == 0) {
+        snprintf(out->api_key, sizeof(out->api_key), "%s", value);
     } else if (strcmp(name, "transfer-encoding") == 0) {
         char lowered[128];
         snprintf(lowered, sizeof(lowered), "%s", value);

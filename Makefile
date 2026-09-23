@@ -28,6 +28,8 @@ RUN_BIND ?= 127.0.0.1
 RUN_PORT ?= 8080
 RUN_THREADS ?= 8
 RUN_DB ?= ./data/app.db
+RUN_API_KEY ?=
+RUN_FLAGS = $(if $(strip $(RUN_API_KEY)),--api-key $(strip $(RUN_API_KEY)))
 
 .PHONY: all clean test sanitize format-check install help run
 
@@ -80,10 +82,10 @@ install: $(BIN)
 	install -m 755 $(BIN) $(DESTDIR)$(BINDIR)/c-echo-server
 
 # Run everything: build + start server with sane defaults.
-# Overrides: make run RUN_PORT=8081 RUN_DB=./data/dev.db
+# Overrides: make run RUN_PORT=8081 RUN_DB=./data/dev.db RUN_API_KEY=secret
 run: $(BIN)
 	mkdir -p $(dir $(RUN_DB))
-	./$(BIN) --bind $(RUN_BIND) --port $(RUN_PORT) --threads $(RUN_THREADS) --db $(RUN_DB)
+	./$(BIN) --bind $(RUN_BIND) --port $(RUN_PORT) --threads $(RUN_THREADS) --db $(RUN_DB) $(RUN_FLAGS)
 
 help:
 	@echo "Targets: all | test | sanitize | format-check | clean | install | run"
