@@ -181,6 +181,25 @@ int main(int argc, char *argv[]) {
     /* Avoid SIGPIPE killing the process on peer reset; send() uses MSG_NOSIGNAL too. */
     signal(SIGPIPE, SIG_IGN);
 
+    /* Pretty console banner with clickable shortcut links (stdout, flushed). */
+    const char *link_host = strcmp(bind_ip, "0.0.0.0") == 0 ? "127.0.0.1" : bind_ip;
+    printf("\n"
+           "  ==============================================================\n"
+           "   C API Server v%s running\n"
+           "  --------------------------------------------------------------\n"
+           "   App:      http://%s:%u/\n"
+           "   Health:   http://%s:%u/health\n"
+           "   Metrics:  http://%s:%u/metrics\n"
+           "   KV:       http://%s:%u/api/kv?limit=50\n"
+           "   Notes:    http://%s:%u/api/notes?limit=50\n"
+           "  --------------------------------------------------------------\n"
+           "   bind=%s threads=%d db=%s\n"
+           "   Stop: Ctrl-C\n"
+           "  ==============================================================\n\n",
+           SERVER_VERSION, link_host, (unsigned)port, link_host, (unsigned)port, link_host, (unsigned)port,
+           link_host, (unsigned)port, link_host, (unsigned)port, bind_ip, threads, db_path);
+    fflush(stdout);
+
     char startup[256];
     snprintf(startup, sizeof(startup), "listening (bind=%s port=%u threads=%d db=%s)", bind_ip, (unsigned)port,
              threads, db_path);

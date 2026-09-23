@@ -13,6 +13,9 @@
 #include "json.h"
 #include "log.h"
 
+/* Embedded console frontend (generated at build time, binary is self-contained). */
+#include "frontend.h"
+
 #define MODULE "api"
 #define ALLOW_ALL "GET, POST, PUT, DELETE"
 #define ALLOW_GET "GET"
@@ -466,10 +469,24 @@ static ApiError dispatch_notes(int fd, const HttpRequest *req, Store *store) {
     }
 }
 
+static ApiError handle_root(int fd) {
+    if (http_respond(fd, 200, "text/html", (const char *)frontend_html, (size_t)frontend_html_len, NULL) != 0) {
+        return API_ERR_INTERNAL;
+    }
+    return API_OK;
+}
+
 ApiError api_dispatch(int fd, const HttpRequest *req, Store *store, Server *server) {
     if (req == NULL || store == NULL || server == NULL) {
         http_respond_error(fd, API_ERR_INTERNAL, "missing context");
         return API_ERR_INTERNAL;
+    }
+    if (strcmp(req->path, "/") == 0 || strcmp(req->path, "/index.html") == 0) {
+        if (req->method != HTTP_GET) {
+            send_method_not_allowed(fd, ALLOW_GET);
+            return API_ERR_METHOD_NOT_ALLOWED;
+        }
+        return handle_root(fd);
     }
     if (strcmp(req->path, "/health") == 0) {
         if (req->method != HTTP_GET) {
