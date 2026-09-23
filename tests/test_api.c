@@ -602,6 +602,7 @@ static int test_api_root_serves_html(void) {
     EXPECT_TRUE(strstr(resp, "200 OK") != NULL);
     EXPECT_TRUE(strstr(resp, "text/html") != NULL);
     EXPECT_TRUE(strstr(resp, "C API Server") != NULL);
+    EXPECT_TRUE(strstr(resp, "data-fn") != NULL);
     EXPECT_TRUE(http_call(18115, "POST / HTTP/1.1\r\nHost: x\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
                           resp, sizeof(resp)) == 0);
     EXPECT_TRUE(strstr(resp, "405") != NULL);
