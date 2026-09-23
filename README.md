@@ -1,7 +1,8 @@
-# C Echo Server (thread-pool)
+# C HTTP API Server (thread-pool + SQLite)
 
-Minimal, correct, and observable TCP echo server in C11. Bounded thread-pool,
-backpressure, graceful shutdown, strict warnings, ASan/UBSan clean, 15 tests.
+Minimal, correct, and observable HTTP/1.1 JSON API in C11. Bounded
+thread-pool, SQLite WAL storage, typed errors with correct status codes,
+strict warnings, ASan/UBSan clean, 35 tests.
 
 ## Architecture
 
@@ -23,18 +24,21 @@ backpressure, graceful shutdown, strict warnings, ASan/UBSan clean, 15 tests.
             |            |            |
             +------------+------------+
                          |
-                    echo loop
-            recv (4KB stack) -> send_all
-           partial/EINTR/timeout handled
+              http_read_request (16KB headers + 64KB body)
+                         |
+                   api_dispatch
+              router -> handlers -> store (SQLite, mutex)
 ```
 
-Concurrency: acceptor + fixed workers. See `docs/ADR-001-concurrency-model.md`.
-Observability: stderr structured logs `[LEVEL] time module=... peer=... msg=...`,
-atomic stats (`connections_accepted/handled/dropped`, `echo_bytes`, `errors`).
+Concurrency: acceptor + fixed workers (see `docs/ADR-001-concurrency-model.md`).
+API + storage: HTTP/1.1 JSON + SQLite WAL (see `docs/ADR-002-http-sqlite.md`).
+Observability: stderr structured logs, atomic stats, `/health`, `/metrics`.
+
+Breaking change vs v0.1: raw TCP echo is now `POST /api/echo`.
 
 ## Build
 
-Requirements: `gcc` (>=11), `make`, `pthread`. Optional: `clang-format`.
+Requirements: `gcc` (>=11), `make`, `pthread`, `libsqlite3-dev`. Optional: `clang-format`.
 
 ```bash
 make
@@ -47,20 +51,49 @@ make clean
 ## Run
 
 ```bash
+make run
+# overrides:
+make run RUN_PORT=8081 RUN_DB=./data/dev.db
+# or directly:
 ./build/server --help
-./build/server --bind 127.0.0.1 --port 8080 --threads 8
-# env overrides (CLI wins):
-BIND_IP=0.0.0.0 PORT=8080 THREADS=8 ./build/server
+./build/server --bind 127.0.0.1 --port 8080 --threads 8 --db ./data/app.db
+# env (CLI wins): BIND_IP, PORT, THREADS, DB_PATH
 ```
 
 Stop with `Ctrl-C` (SIGINT) or `kill -TERM <pid>`: listener closes, queue
-drains, workers join, `stopped cleanly` is logged.
+drains, workers join, WAL checkpoints, `stopped cleanly` is logged.
 
-Quick echo check:
+## Endpoints
+
+| Method | Path | Body | Success | Errors |
+|--------|------|------|---------|--------|
+| GET | `/health` | — | 200 `{status,version,uptime_s}` | 405 |
+| GET | `/metrics` | — | 200 `{connections_*,http_*,kv_count,notes_count}` | 405 |
+| POST | `/api/echo` | `{"data":"hi"}` | 200 `{"data":"hi"}` | 400, 411, 415 |
+| PUT | `/api/kv/:key` | `{"value":"..."}` | 200 `{key,value}` | 400, 411, 413, 415 |
+| GET | `/api/kv/:key` | — | 200 `{key,value}` | 400, 404 |
+| DELETE | `/api/kv/:key` | — | 204 | 400, 404 |
+| GET | `/api/kv?prefix=&limit=` | — | 200 `{items:[...]}` | 400 |
+| POST | `/api/notes` | `{"title","body"}` | 201 note | 400, 411, 413, 415 |
+| GET | `/api/notes?limit=&offset=` | — | 200 `{items,total}` | 400 |
+| GET | `/api/notes/:id` | — | 200 note | 400, 404 |
+| PUT | `/api/notes/:id` | `{"title","body"}` | 200 note | 400, 404, 411, 415 |
+| DELETE | `/api/notes/:id` | — | 204 | 400, 404 |
+
+Key: `[A-Za-z0-9._-]{1,128}`. Title 1..200 chars, note body 0..8192.
+`limit` 1..100 (default 50), `offset >= 0`. Errors are JSON:
+`{"error":"not_found","message":"..."}` with `Allow` header on 405.
+
+Quick check:
 
 ```bash
-./build/server --port 8080 &
-printf 'hello' | nc 127.0.0.1 8080 | xxd
+make run &
+curl localhost:8080/health
+curl -X PUT localhost:8080/api/kv/theme -H 'Content-Type: application/json' -d '{"value":"dark"}'
+curl localhost:8080/api/kv/theme
+curl -X POST localhost:8080/api/notes -H 'Content-Type: application/json' -d '{"title":"t1","body":"b1"}'
+curl 'localhost:8080/api/notes?limit=10'
+curl localhost:8080/metrics
 kill %1
 ```
 
@@ -68,29 +101,32 @@ kill %1
 
 | Flag | Env | Default | Notes |
 |------|-----|---------|-------|
-| `--bind IP` | `BIND_IP` | `0.0.0.0` | IPv4 only, validated with `inet_pton` |
+| `--bind IP` | `BIND_IP` | `0.0.0.0` | IPv4, validated with `inet_pton` |
 | `--port PORT` | `PORT` | `8080` | 1-65535 |
 | `--threads N` | `THREADS` | `8` | 1-64 workers |
-| — | — | backlog 64, queue 128, 5s IO timeout | compile-time constants in `server.h` |
+| `--db PATH` | `DB_PATH` | `./data/app.db` | SQLite file, parent dirs created; failure aborts (no fallback) |
 
-## Protocol / API
+Compile-time: backlog 64, queue 128, 5s IO timeout, headers 16KB, body 64KB.
 
-Wire: raw TCP echo. Client sends any bytes; server returns identical bytes
-until EOF. No framing, no auth. Timeouts: 5s recv/send. Large payloads are
-chunked through the 4KB stack buffer (verified with 64KB test).
+## Library API
 
-Library API (`include/server.h`): `server_config_validate`,
-`server_create`, `server_run` (blocking), `server_stop` (thread-safe,
-idempotent), `server_destroy`, `server_stats`, `server_send_all`.
-See header doc comments for ownership and thread-safety.
+`include/server.h`: `server_config_validate`, `server_create` (opens SQLite,
+fails without fallback), `server_run`, `server_stop`, `server_destroy`
+(checkpoints WAL), `server_stats` (+ `http_requests/http_errors`),
+`server_uptime_s`, `server_send_all`.
+`include/http.h`: typed `ApiError`, `http_parse_request`, `http_read_request`,
+`http_respond`, `http_respond_error`, `http_query_get`.
+`include/store.h`: `store_open/close`, `kv_put/get/del/list`,
+`note_create/list/get/update/del`, `store_counts` (all thread-safe).
+`include/api.h`: `api_dispatch`, `api_require_json`.
 
 ## Troubleshooting
 
-- `bind/listen failed: Address already in use`: another process holds the
-  port. Pick another `--port` or `lsof -i :8080`.
-- `invalid --port/--threads`: check range (port 1-65535, threads 1-64).
-- Client hangs: server has 5s IO timeout; check firewall / `nc -v`.
-- `make sanitize` fails: read ASan trace (file:line), fix use-after-free /
-  overflow, re-run `make test`.
-- High `connections_dropped_queue_full`: queue saturated; increase
-  `--threads` or queue size, or add client backoff.
+- `bind/listen failed: Address already in use`: pick another `--port`.
+- `store_open failed`: check `--db` path/permissions/disk space.
+- `411 Length Required`: `PUT`/`POST` need `Content-Length`.
+- `415`: send `-H 'Content-Type: application/json'`.
+- `413`: body over 64KB; shrink payload.
+- `405`: check `Allow` header for the right method.
+- `make sanitize` fails: read ASan trace, fix, re-run `make test`.
+- High `connections_dropped_queue_full`: increase `--threads` or add backoff.
