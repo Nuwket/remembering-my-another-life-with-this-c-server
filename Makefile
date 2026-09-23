@@ -2,7 +2,7 @@ CC ?= gcc
 CSTD := -std=c11 -D_POSIX_C_SOURCE=200809L -D_DEFAULT_SOURCE
 WARN := -Wall -Wextra -Werror -Wconversion -Wshadow -pedantic
 OPT := -O2 -g
-INCLUDES := -Iinclude
+INCLUDES := -Iinclude -Ibuild
 THREADS := -pthread
 
 CFLAGS ?= $(CSTD) $(WARN) $(OPT) $(INCLUDES) $(THREADS)
@@ -34,6 +34,13 @@ all: $(BIN)
 
 build/%.o: src/%.c | build
 	$(CC) $(CFLAGS) -c $< -o $@
+
+# Embedded frontend: generated header keeps the binary self-contained
+# (no runtime dependency on the web/ directory).
+build/frontend.h: web/index.html scripts/embed.py | build
+	python3 scripts/embed.py web/index.html $@ frontend_html
+
+build/api.o: build/frontend.h
 
 $(BIN): $(OBJ)
 	$(CC) $(CFLAGS) $(OBJ) -o $@ $(LDFLAGS) $(LDLIBS)
