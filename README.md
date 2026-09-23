@@ -53,11 +53,11 @@ make clean
 ```bash
 make run
 # overrides:
-make run RUN_PORT=8081 RUN_DB=./data/dev.db
+make run RUN_PORT=8081 RUN_DB=./data/dev.db RUN_API_KEY=secret
 # or directly:
 ./build/server --help
-./build/server --bind 127.0.0.1 --port 8080 --threads 8 --db ./data/app.db
-# env (CLI wins): BIND_IP, PORT, THREADS, DB_PATH
+./build/server --bind 127.0.0.1 --port 8080 --threads 8 --db ./data/app.db --api-key secret
+# env (CLI wins): BIND_IP, PORT, THREADS, DB_PATH, API_KEY
 ```
 
 Stop with `Ctrl-C` (SIGINT) or `kill -TERM <pid>`: listener closes, queue
@@ -74,37 +74,51 @@ drains, workers join, WAL checkpoints, `stopped cleanly` is logged.
  Notes:    http://127.0.0.1:8080/api/notes?limit=50
 ```
 
-## Console frontend (`GET /`)
+## Playground frontend (`GET /`)
 
-The binary embeds a zero-dependency console (`web/index.html` via
-`scripts/embed.py`, no CWD dependency): live health dot, metrics cards with
-5s refresh, KV CRUD, Notes CRUD, echo probe, and shortcut links.
+The binary embeds a zero-dependency API playground (`web/index.html` via
+`scripts/embed.py`, no CWD dependency). No mocks: every control calls the
+live C backend.
 
-- **Dev Tools panel:** traces the last request (method, path, status, ms,
-  request/response bodies), keeps a 15-entry history, and copies any request
-  as a `curl` command.
-- **Auto-explain (English):** every response is mapped to a plain-English
-  cause plus fix (status codes and `error` codes like `missing_field`).
-- **Languages:** UI strings in EN/PT/RU; default comes from
-  `navigator.language` with a manual EN|PT|RU switch persisted in
-  `localStorage`.
+- Per-endpoint cards with method badge, route, what-it-tests, prefilled
+  editable inputs, execute buttons, and `status · ms · bytes` + formatted
+  JSON output with ok/err frames.
+- Raw HTTP inspector: hand-built method/path/headers/body composer, last-call
+  detail, 15-entry history, auto-generated curl with copy button.
+- Auth section: token vault (browser `localStorage` only), with/without/wrong
+  key demos, live open/protected badge from `/health`.
+- Echo payload lab with presets (small, multi-field, ~5KB, invalid, plain
+  text) and an error gallery firing real rejections (400, 404, 405, 413, 415).
+- Live `/metrics` cards plus an honest this-tab session matrix (client-side
+  counts, labeled as such).
+
+## Auth
+
+Optional API key. Without `--api-key`/`API_KEY` the server is **open**.
+With it set, writes (`PUT`/`POST`/`DELETE` under `/api/`) require header
+`X-API-Key`: missing/empty → `401 unauthorized`, mismatch → `403 forbidden`
+(constant-time compare). Reads stay public. `/health` reports
+`"auth":"open"` or `"auth":"protected"`. Keys compare silently — the value
+is never logged.
 
 ## Endpoints
 
 | Method | Path | Body | Success | Errors |
 |--------|------|------|---------|--------|
-| GET | `/health` | — | 200 `{status,version,uptime_s}` | 405 |
+| GET | `/health` | — | 200 `{status,version,uptime_s,auth}` | 405 |
 | GET | `/metrics` | — | 200 `{connections_*,http_*,kv_count,notes_count}` | 405 |
 | POST | `/api/echo` | `{"data":"hi"}` | 200 `{"data":"hi"}` | 400, 411, 415 |
-| PUT | `/api/kv/:key` | `{"value":"..."}` | 200 `{key,value}` | 400, 411, 413, 415 |
+| PUT | `/api/kv/:key` | `{"value":"..."}` | 200 `{key,value}` | 400, 401, 403, 411, 413, 415 |
 | GET | `/api/kv/:key` | — | 200 `{key,value}` | 400, 404 |
-| DELETE | `/api/kv/:key` | — | 204 | 400, 404 |
+| DELETE | `/api/kv/:key` | — | 204 | 400, 401, 403, 404 |
 | GET | `/api/kv?prefix=&limit=` | — | 200 `{items:[...]}` | 400 |
-| POST | `/api/notes` | `{"title","body"}` | 201 note | 400, 411, 413, 415 |
+| POST | `/api/notes` | `{"title","body"}` | 201 note | 400, 401, 403, 411, 413, 415 |
 | GET | `/api/notes?limit=&offset=` | — | 200 `{items,total}` | 400 |
 | GET | `/api/notes/:id` | — | 200 note | 400, 404 |
-| PUT | `/api/notes/:id` | `{"title","body"}` | 200 note | 400, 404, 411, 415 |
-| DELETE | `/api/notes/:id` | — | 204 | 400, 404 |
+| PUT | `/api/notes/:id` | `{"title","body"}` | 200 note | 400, 401, 403, 404, 411, 415 |
+| DELETE | `/api/notes/:id` | — | 204 | 400, 401, 403, 404 |
+
+401/403 only in protected mode (`--api-key` set); otherwise writes are open.
 
 Key: `[A-Za-z0-9._-]{1,128}`. Title 1..200 chars, note body 0..8192.
 `limit` 1..100 (default 50), `offset >= 0`. Errors are JSON:

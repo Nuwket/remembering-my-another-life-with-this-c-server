@@ -86,6 +86,33 @@ EOF
 
 sqlite3 "$DB" "SELECT COUNT(*) FROM kv;" 2>/dev/null || python3 -c "import sqlite3; print(sqlite3.connect('$DB').execute('SELECT COUNT(*) FROM kv').fetchone()[0])"
 
+# Protected mode: same binary with --api-key. Writes need X-API-Key.
+AUTHPORT=$((PORT + 1))
+AUTHDB="${DB%.db}-auth.db"
+rm -f "$AUTHDB" "$AUTHDB-wal" "$AUTHDB-shm"
+./build/server --bind 127.0.0.1 --port "$AUTHPORT" --threads 2 --db "$AUTHDB" --api-key smoke-key &
+AUTHPID=$!
+trap 'kill -TERM $AUTHPID 2>/dev/null || true; kill -TERM $SERVER_PID 2>/dev/null || true' EXIT
+python3 - "$AUTHPORT" <<'EOF'
+import json, sys, urllib.request, urllib.error
+port = sys.argv[1]
+def put(key, headers):
+    req = urllib.request.Request("http://127.0.0.1:%s/api/kv/%s" % (port, key),
+                                 data=json.dumps({"value": "v"}).encode(), method="PUT", headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=5) as r:
+            return r.status
+    except urllib.error.HTTPError as e:
+        return e.code
+assert put("a", {"Content-Type": "application/json"}) == 401
+assert put("a", {"Content-Type": "application/json", "X-API-Key": "wrong"}) == 403
+assert put("a", {"Content-Type": "application/json", "X-API-Key": "smoke-key"}) == 200
+print("smoke auth OK")
+EOF
+kill -TERM "$AUTHPID"
+wait "$AUTHPID" 2>/dev/null || true
+rm -f "$AUTHDB" "$AUTHDB-wal" "$AUTHDB-shm"
+
 kill -TERM "$SERVER_PID"
 wait "$SERVER_PID"
 echo "smoke shutdown OK"
