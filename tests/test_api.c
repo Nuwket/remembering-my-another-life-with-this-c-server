@@ -597,7 +597,7 @@ static int test_api_root_serves_html(void) {
     TestServer ts;
     memset(&ts, 0, sizeof(ts));
     EXPECT_TRUE(test_server_start(&ts, 18115) == 0);
-    char resp[32768];
+    char resp[131072];
     EXPECT_TRUE(http_call(18115, "GET / HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n", resp, sizeof(resp)) == 0);
     EXPECT_TRUE(strstr(resp, "200 OK") != NULL);
     EXPECT_TRUE(strstr(resp, "text/html") != NULL);

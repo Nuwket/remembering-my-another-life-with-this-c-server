@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>C API Server — Console</title>
+<title>C API Server — Playground</title>
 <style>
   :root { --bg:#0d1117; --panel:#161b22; --line:#30363d; --txt:#e6edf3; --dim:#8b949e;
-          --green:#3fb950; --red:#f85149; --blue:#58a6ff; --amber:#d29922; }
+          --green:#3fb950; --red:#f85149; --blue:#58a6ff; --amber:#d29922; --purple:#a371f7; }
   * { box-sizing:border-box; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
   body { background:var(--bg); color:var(--txt); margin:0; padding:24px; line-height:1.5; }
   .wrap { max-width:1080px; margin:0 auto; }
@@ -30,28 +30,42 @@
   section.panel h2 { font-size:16px; margin:0 0 4px; color:var(--blue); }
   section.panel.featured h2 { color:var(--amber); }
   .hint { color:var(--dim); font-size:13px; margin:0 0 12px; }
+  .route { display:flex; align-items:center; gap:8px; margin:14px 0 8px; flex-wrap:wrap; }
+  .route:first-of-type { margin-top:0; }
+  .m { font-size:11px; font-weight:bold; padding:3px 8px; border-radius:4px; }
+  .m.GET { background:#0f2b16; color:var(--green); } .m.PUT { background:#0f2440; color:var(--blue); }
+  .m.POST { background:#221a08; color:var(--amber); } .m.DELETE { background:#2b1414; color:var(--red); }
+  .route code { font-size:13px; }
+  .tests { font-size:12px; color:var(--dim); margin:0 0 8px; }
   label.f { display:block; font-size:11px; color:var(--dim); text-transform:uppercase; letter-spacing:.04em; margin:0 0 4px; }
   .row { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; align-items:flex-end; }
   .field { flex:1; min-width:140px; }
-  input, textarea { background:var(--bg); color:var(--txt); border:1px solid var(--line); border-radius:6px;
+  input, textarea, select { background:var(--bg); color:var(--txt); border:1px solid var(--line); border-radius:6px;
                     padding:9px 10px; font-size:14px; width:100%; }
-  textarea { min-height:60px; resize:vertical; }
+  textarea { min-height:60px; resize:vertical; font-size:12px; }
+  select { width:auto; }
   button.act, button.ghost, button.danger { border-radius:6px; padding:9px 16px; min-height:38px; cursor:pointer; font-size:13px; }
   button.act { background:#1f6feb; color:#fff; border:0; }
   button.act:hover { background:#388bfd; }
-  button.demo { background:#8957e5; color:#fff; border:0; border-radius:6px; padding:10px 18px; min-height:40px;
-                cursor:pointer; font-size:14px; font-weight:bold; }
-  button.demo:hover { background:#a371f7; }
   button.danger { background:#5a1f1f; color:#fff; border:0; }
   button.danger:hover { background:var(--red); }
   button.ghost { background:transparent; color:var(--txt); border:1px solid var(--line); }
   button.ghost:hover { border-color:var(--blue); }
+  button:disabled { opacity:.5; cursor:wait; }
   :focus-visible { outline:2px solid var(--blue); outline-offset:2px; }
   pre.out { background:var(--bg); border:1px solid var(--line); border-radius:6px; padding:10px; font-size:12px;
             max-height:260px; overflow:auto; white-space:pre-wrap; word-break:break-word; margin:8px 0 0; }
+  pre.out.ok { border-color:var(--green); } pre.out.err { border-color:var(--red); }
   .explain { border:1px solid var(--amber); border-radius:6px; padding:10px; font-size:13px; margin:8px 0 0;
              background:#221a08; }
   .explain b { color:var(--amber); }
+  .badge { display:inline-block; font-size:11px; padding:3px 10px; border-radius:20px; border:1px solid var(--line); }
+  .badge.open { color:var(--green); border-color:var(--green); }
+  .badge.protected { color:var(--amber); border-color:var(--amber); }
+  .notice { font-size:13px; border:1px dashed var(--amber); border-radius:6px; padding:8px 10px; margin:0 0 10px; }
+  table.sess { width:100%; border-collapse:collapse; font-size:12px; margin-top:8px; }
+  table.sess th, table.sess td { text-align:left; padding:4px 8px; border-bottom:1px solid var(--line); }
+  table.sess th { color:var(--dim); font-weight:normal; text-transform:uppercase; font-size:11px; }
   .toast { position:fixed; right:16px; bottom:16px; display:flex; flex-direction:column; gap:8px; z-index:10; }
   .toast div { background:#2b1414; border:1px solid var(--red); border-radius:6px; padding:10px 14px; font-size:13px;
                max-width:360px; }
@@ -68,7 +82,7 @@
   <header class="hero">
     <span id="dot" class="dot" role="status" aria-label="server status"></span>
     <div>
-      <h1>C API Server — Console</h1>
+      <h1>C API Server — Playground</h1>
       <div class="sub" id="healthLine" aria-live="polite">…</div>
     </div>
     <div class="spacer"></div>
@@ -85,80 +99,147 @@
     <div class="card"><div class="k" data-i18n="mConn">connections</div><div class="v" id="mConn">–</div></div>
   </div>
 
-  <section class="panel featured" aria-labelledby="devH">
-    <h2 id="devH" data-i18n="devTitle">★ Dev Tools — request inspector</h2>
-    <p class="hint" data-i18n="devHint">Every button on this page is traced here: method, path, status, time,
-      request and response bodies. Errors get an automatic plain-English explanation below. New here?
-      Press “Run demo” — it fills sample data and exercises KV, Notes and Echo end to end.</p>
+  <section class="panel" aria-labelledby="sessH">
+    <h2 id="sessH" data-i18n="sessTitle">Session calls — this tab only</h2>
+    <p class="hint" data-i18n="sessHint">Real counts of requests made from this page, grouped by endpoint
+      template and status class. Server-wide totals stay on the cards above (live /metrics).</p>
+    <table class="sess"><thead><tr>
+      <th data-i18n="colRoute">endpoint</th><th>2xx</th><th>4xx</th><th>5xx</th><th data-i18n="colTotal">total</th>
+    </tr></thead><tbody id="sessBody"><tr><td colspan="5">—</td></tr></tbody></table>
+  </section>
+
+  <section class="panel" aria-labelledby="authH">
+    <h2 id="authH" data-i18n="authTitle">Auth — X-API-Key</h2>
+    <p class="hint" data-i18n="authHint">Writes (PUT/POST/DELETE under /api/) require the key only when the
+      server runs protected (<code>--api-key</code>). Reads are always public. Missing key → 401,
+      wrong key → 403 (constant-time compare on the server).</p>
     <div class="row">
-      <button class="demo" onclick="runDemo()" data-i18n="runDemo">▶ Run demo</button>
+      <div class="field"><label class="f" for="apiToken" data-i18n="tokenL">api token</label>
+        <input id="apiToken" type="password" data-i18n-ph="tokenPh" placeholder="paste token, e.g. s3cret"
+          data-tip="tok"></div>
+      <button class="act" onclick="go(this,'tokSave')" data-i18n="save">Save</button>
+      <button class="ghost" onclick="go(this,'tokForget')" data-i18n="forget">Forget</button>
+      <span class="badge open" id="authMode">…</span>
+    </div>
+    <div class="notice" id="authNotice" hidden></div>
+    <div class="row">
+      <button class="act" onclick="go(this,'authWith')" data-i18n="authWith">PUT with saved key → expect 200</button>
+      <button class="ghost" onclick="go(this,'authWithout')" data-i18n="authWithout">PUT without key → expect 401/200</button>
+      <button class="danger" onclick="go(this,'authWrong')" data-i18n="authWrong">PUT with wrong key → expect 403/200</button>
+    </div>
+    <pre class="out" id="authOut" aria-live="polite">—</pre>
+  </section>
+
+  <section class="panel featured" aria-labelledby="inspH">
+    <h2 id="inspH" data-i18n="inspTitle">★ Inspector — raw HTTP</h2>
+    <p class="hint" data-i18n="inspHint">Compose any request by hand and fire it at the real server.
+      Everything below traces here too: the last call, a 15-entry history and an auto-generated curl.</p>
+    <div class="row">
+      <div class="field" style="max-width:150px;flex:none"><label class="f" for="cMethod">method</label>
+        <select id="cMethod"><option>GET</option><option>POST</option><option>PUT</option><option>DELETE</option></select></div>
+      <div class="field"><label class="f" for="cPath" data-i18n="pathL">path</label>
+        <input id="cPath" value="/health" data-tip="path"></div>
+      <button class="act" onclick="go(this,'composerGo')" data-i18n="execute">Execute</button>
       <button class="ghost" onclick="copyCurl()">curl ⧉</button>
       <button class="ghost" onclick="clearHist()" data-i18n="clear">Clear</button>
     </div>
-    <div class="explain" aria-live="polite"><b>auto-explain (EN):</b> <span id="devExplainTxt">make a request above…</span></div>
+    <div class="row">
+      <div class="field"><label class="f" for="cHeaders" data-i18n="headersL">headers (one per line)</label>
+        <textarea id="cHeaders" rows="2" data-tip="hdrs">Content-Type: application/json</textarea></div>
+      <div class="field"><label class="f" for="cBody" data-i18n="bodyL">body (raw)</label>
+        <textarea id="cBody" rows="2" data-tip="rawbody"></textarea></div>
+    </div>
+    <div class="explain" aria-live="polite"><b>auto-explain (EN):</b> <span id="devExplainTxt">make a request…</span></div>
     <pre class="out" id="devLast" aria-live="polite">—</pre>
     <pre class="out" id="devHist" style="max-height:160px" aria-label="request history">—</pre>
   </section>
 
   <section class="panel" aria-labelledby="kvH">
     <h2 id="kvH" data-i18n="kvTitle">Key–Value store</h2>
-    <p class="hint" data-i18n="kvHint">Raw CRUD over SQLite. “Sample” fills a test key so you can PUT → GET → DEL in one go.</p>
+    <p class="hint" data-i18n="kvHint">Backed by SQLite. All fields come prefilled — edit and hit execute.</p>
+
+    <div class="route"><span class="m PUT">PUT</span><code>/api/kv/:key</code></div>
+    <p class="tests" data-i18n="kvPutT">Tests: upsert, JSON body parsing, key charset validation, auth on writes.</p>
     <div class="row">
       <div class="field"><label class="f" for="kvKey" data-i18n="keyL">key</label>
-        <input id="kvKey" data-i18n-ph="kvKeyPh" placeholder="key  [A-Za-z0-9._-]{1,128}"></div>
+        <input id="kvKey" value="demo" data-tip="key"></div>
       <div class="field"><label class="f" for="kvVal" data-i18n="valL">value</label>
-        <input id="kvVal" data-i18n-ph="kvValPh" placeholder="value (JSON string)"></div>
+        <input id="kvVal" value='{"status":"funcionando","source":"playground"}' data-tip="value"></div>
+      <button class="act" onclick="go(this,'kvPut')" data-i18n="saveEx">Save example</button>
     </div>
     <div class="row">
-      <button class="act" onclick="kvPut()">PUT</button>
-      <button class="ghost" onclick="kvGet()">GET</button>
-      <button class="danger" onclick="kvDel()">DEL</button>
-      <button class="ghost" onclick="fillKv()" data-i18n="sample">Sample</button>
+      <button class="ghost" onclick="go(this,'kvGet')" data-i18n="getEx">Fetch example</button>
+      <button class="danger" onclick="go(this,'kvDel')" data-i18n="delEx">Delete (asks first)</button>
+      <button class="ghost" onclick="go(this,'kvList')" data-i18n="listEx">List (limit 50)</button>
     </div>
     <div class="row">
       <div class="field"><label class="f" for="kvPrefix" data-i18n="prefixL">prefix</label>
-        <input id="kvPrefix" data-i18n-ph="kvPrefixPh" placeholder="prefix filter (optional)"></div>
-      <button class="ghost" onclick="kvList()" data-i18n="list">LIST</button>
+        <input id="kvPrefix" value="" data-tip="prefix"></div>
+      <div class="field" style="max-width:120px"><label class="f" for="kvLimit" data-i18n="limitL">limit</label>
+        <input id="kvLimit" value="50" data-tip="limit"></div>
     </div>
     <pre class="out" id="kvOut" aria-live="polite">—</pre>
   </section>
 
   <section class="panel" aria-labelledby="nH">
     <h2 id="nH" data-i18n="notesTitle">Notes</h2>
-    <p class="hint" data-i18n="notesHint">Auto-increment notes in SQLite. “Sample” fills title + body for a 1-click create.</p>
+    <p class="hint" data-i18n="notesHint">Auto-increment rows in SQLite. Prefilled for 1-click create.</p>
     <div class="row">
       <div class="field"><label class="f" for="nTitle" data-i18n="titleL">title</label>
-        <input id="nTitle" data-i18n-ph="nTitlePh" placeholder="title (1..200 chars)"></div>
-    </div>
-    <div class="row">
+        <input id="nTitle" value="hello" data-tip="title"></div>
       <div class="field"><label class="f" for="nBody" data-i18n="bodyL">body</label>
-        <textarea id="nBody" data-i18n-ph="nBodyPh" placeholder="body (0..8192 chars)"></textarea></div>
-    </div>
-    <div class="row">
-      <button class="act" onclick="noteCreate()" data-i18n="create">CREATE</button>
-      <button class="ghost" onclick="noteList()" data-i18n="list2">LIST</button>
-      <button class="ghost" onclick="fillNote()" data-i18n="sample2">Sample</button>
+        <input id="nBody" value="my first note via the playground" data-tip="body"></div>
+      <button class="act" onclick="go(this,'noteCreate')" data-i18n="create">CREATE</button>
+      <button class="ghost" onclick="go(this,'noteList')" data-i18n="list2">LIST</button>
     </div>
     <div class="row">
       <div class="field" style="max-width:140px"><label class="f" for="nId">id</label>
-        <input id="nId" placeholder="id"></div>
-      <button class="ghost" onclick="noteGet()">GET</button>
-      <button class="ghost" onclick="noteUpdate()" data-i18n="update">UPDATE</button>
-      <button class="danger" onclick="noteDel()">DEL</button>
+        <input id="nId" value="1" data-tip="nid"></div>
+      <button class="ghost" onclick="go(this,'noteGet')">GET</button>
+      <button class="ghost" onclick="go(this,'noteUpdate')" data-i18n="update">UPDATE</button>
+      <button class="danger" onclick="go(this,'noteDel')" data-i18n="delNote">DELETE (asks first)</button>
     </div>
     <pre class="out" id="nOut" aria-live="polite">—</pre>
   </section>
 
   <section class="panel" aria-labelledby="eH">
-    <h2 id="eH" data-i18n="echoTitle">Echo / raw probe</h2>
-    <p class="hint" data-i18n="echoHint">Sends any JSON to POST /api/echo and shows exactly what the C server returns.</p>
+    <h2 id="eH" data-i18n="echoTitle">Echo / payload lab</h2>
+    <p class="hint" data-i18n="echoHint">POST /api/echo returns your JSON untouched. Presets fill the
+      composer-grade sender below — including invalid and oversized payloads.</p>
     <div class="row">
-      <div class="field"><label class="f" for="echoIn">JSON</label>
-        <input id="echoIn" placeholder='{"data":"hello"}'></div>
-      <button class="act" onclick="doEcho()">POST /api/echo</button>
-      <button class="ghost" onclick="fillEcho()" data-i18n="sample3">Sample</button>
+      <button class="ghost" onclick="echoPreset('small')" data-i18n="pSmall">small JSON</button>
+      <button class="ghost" onclick="echoPreset('multi')" data-i18n="pMulti">multi-field</button>
+      <button class="ghost" onclick="echoPreset('large')" data-i18n="pLarge">large (~5KB)</button>
+      <button class="ghost" onclick="echoPreset('invalid')" data-i18n="pInvalid">invalid JSON</button>
+      <button class="ghost" onclick="echoPreset('text')" data-i18n="pText">plain text</button>
+    </div>
+    <div class="row">
+      <div class="field"><label class="f" for="echoBody" data-i18n="bodyL2">body (raw)</label>
+        <textarea id="echoBody" rows="3">{"data":"hello"}</textarea></div>
+      <div class="field" style="max-width:220px;flex:none"><label class="f" for="echoCT">Content-Type</label>
+        <select id="echoCT"><option>application/json</option><option>text/plain</option></select></div>
+      <button class="act" onclick="go(this,'doEcho')" data-i18n="send">Send</button>
     </div>
     <pre class="out" id="echoOut" aria-live="polite">—</pre>
+  </section>
+
+  <section class="panel" aria-labelledby="errH">
+    <h2 id="errH" data-i18n="errTitle">Error gallery — break it on purpose</h2>
+    <p class="hint" data-i18n="errHint">Each button fires a request the server must reject. Watch the status,
+      the <code>error</code> code and the auto-explain box.</p>
+    <div class="row">
+      <button class="ghost" onclick="go(this,'errKey')" data-i18n="eKey">bad key → 400</button>
+      <button class="ghost" onclick="go(this,'errMissing')" data-i18n="eMissing">missing field → 400</button>
+      <button class="ghost" onclick="go(this,'errId')" data-i18n="eId">bad id → 400</button>
+      <button class="ghost" onclick="go(this,'errGone')" data-i18n="eGone">gone key → 404</button>
+    </div>
+    <div class="row">
+      <button class="ghost" onclick="go(this,'errMethod')" data-i18n="eMethod">wrong method → 405</button>
+      <button class="ghost" onclick="go(this,'errRoute')" data-i18n="eRoute">unknown route → 404</button>
+      <button class="ghost" onclick="go(this,'errCT')" data-i18n="eCT">wrong content-type → 415</button>
+      <button class="ghost" onclick="go(this,'errBig')" data-i18n="eBig">oversized → 413</button>
+    </div>
+    <pre class="out" id="errOut" aria-live="polite">—</pre>
   </section>
 
   <section class="panel links">
@@ -169,7 +250,7 @@
     <a href="/api/notes?limit=50" target="_blank" rel="noopener">/api/notes</a>
   </section>
 
-  <footer data-i18n="footer">C11 · thread-pool · SQLite WAL · typed errors — no frameworks, no CDN.</footer>
+  <footer data-i18n="footer">C API Server — every button above hits the real C backend. No mocks.</footer>
 </div>
 <div class="toast" id="toast" aria-live="assertive"></div>
 <script>
@@ -177,41 +258,98 @@
 /* ---------- i18n: EN/PT/RU, default from the browser ---------- */
 const I18N = {
   en: { probing:"probing /health…", mReq:"requests", mErr:"errors", mKv:"kv keys", mNotes:"notes",
-    mConn:"connections", kvTitle:"Key–Value store", notesTitle:"Notes", echoTitle:"Echo / raw probe",
-    devTitle:"★ Dev Tools — request inspector", linksTitle:"Shortcuts",
-    devHint:"Every button on this page is traced here: method, path, status, time, request and response bodies. Errors get an automatic plain-English explanation below. New here? Press “Run demo” — it fills sample data and exercises KV, Notes and Echo end to end.",
-    kvHint:"Raw CRUD over SQLite. “Sample” fills a test key so you can PUT → GET → DEL in one go.",
-    notesHint:"Auto-increment notes in SQLite. “Sample” fills title + body for a 1-click create.",
-    echoHint:"Sends any JSON to POST /api/echo and shows exactly what the C server returns.",
-    list:"LIST", create:"CREATE", update:"UPDATE", clear:"Clear", sample:"Sample", runDemo:"▶ Run demo",
-    keyL:"key", valL:"value", prefixL:"prefix", titleL:"title", bodyL:"body",
-    kvKeyPh:"key  [A-Za-z0-9._-]{1,128}", kvValPh:"value (JSON string)", kvPrefixPh:"prefix filter (optional)",
-    nTitlePh:"title (1..200 chars)", nBodyPh:"body (0..8192 chars)",
-    footer:"C11 · thread-pool · SQLite WAL · typed errors — no frameworks, no CDN." },
+    mConn:"connections", sessTitle:"Session calls — this tab only", colRoute:"endpoint", colTotal:"total",
+    sessHint:"Real counts of requests made from this page, grouped by endpoint template and status class. Server-wide totals stay on the cards above (live /metrics).",
+    authTitle:"Auth — X-API-Key", save:"Save", forget:"Forget",
+    authHint:"Writes (PUT/POST/DELETE under /api/) require the key only when the server runs protected (--api-key). Reads are always public. Missing key → 401, wrong key → 403 (constant-time compare on the server).",
+    tokenL:"api token", tokenPh:"paste token, e.g. s3cret",
+    authWith:"PUT with saved key → expect 200", authWithout:"PUT without key → expect 401/200", authWrong:"PUT with wrong key → expect 403/200",
+    openNote:"Server is OPEN (no --api-key): auth demos will return 200. Restart with an API key to see 401/403 for real.",
+    inspTitle:"★ Inspector — raw HTTP", execute:"Execute", clear:"Clear",
+    inspHint:"Compose any request by hand and fire it at the real server. Everything below traces here too: the last call, a 15-entry history and an auto-generated curl.",
+    pathL:"path", headersL:"headers (one per line)", bodyL:"body (raw)",
+    kvTitle:"Key–Value store", kvHint:"Backed by SQLite. All fields come prefilled — edit and hit execute.",
+    saveEx:"Save example", getEx:"Fetch example", delEx:"Delete (asks first)", listEx:"List (limit 50)",
+    keyL:"key", valL:"value", prefixL:"prefix", limitL:"limit",
+    notesTitle:"Notes", notesHint:"Auto-increment rows in SQLite. Prefilled for 1-click create.",
+    create:"CREATE", update:"UPDATE", titleL:"title", bodyL:"body", delNote:"DELETE (asks first)",
+    echoTitle:"Echo / payload lab", send:"Send",
+    echoHint:"POST /api/echo returns your JSON untouched. Presets fill the composer-grade sender below — including invalid and oversized payloads.",
+    pSmall:"small JSON", pMulti:"multi-field", pLarge:"large (~5KB)", pInvalid:"invalid JSON", pText:"plain text",
+    errTitle:"Error gallery — break it on purpose",
+    errHint:"Each button fires a request the server must reject. Watch the status, the error code and the auto-explain box.",
+    eKey:"bad key → 400", eMissing:"missing field → 400", eId:"bad id → 400", eGone:"gone key → 404",
+    eMethod:"wrong method → 405", eRoute:"unknown route → 404", eCT:"wrong content-type → 415", eBig:"oversized → 413",
+    linksTitle:"Shortcuts", footer:"C API Server — every button above hits the real C backend. No mocks." },
   pt: { probing:"consultando /health…", mReq:"requisições", mErr:"erros", mKv:"chaves kv", mNotes:"notas",
-    mConn:"conexões", kvTitle:"Armazenamento Chave–Valor", notesTitle:"Notas", echoTitle:"Echo / sonda bruta",
-    devTitle:"★ Dev Tools — inspetor de requisições", linksTitle:"Atalhos",
-    devHint:"Todo botão desta página é rastreado aqui: método, rota, status, tempo e corpos de ida e volta. Erros ganham explicação automática em inglês abaixo. Novo por aqui? Aperte “Run demo” — preenche dados de exemplo e exercita KV, Notas e Echo de ponta a ponta.",
-    kvHint:"CRUD direto no SQLite. “Sample” preenche uma chave de teste para PUT → GET → DEL rapidinho.",
-    notesHint:"Notas com id automático no SQLite. “Sample” preenche título + texto para criar em 1 clique.",
-    echoHint:"Envia qualquer JSON ao POST /api/echo e mostra exatamente o que o servidor C devolve.",
-    list:"LISTAR", create:"CRIAR", update:"ATUALIZAR", clear:"Limpar", sample:"Exemplo", runDemo:"▶ Demo",
-    keyL:"chave", valL:"valor", prefixL:"prefixo", titleL:"título", bodyL:"texto",
-    kvKeyPh:"chave  [A-Za-z0-9._-]{1,128}", kvValPh:"valor (string JSON)", kvPrefixPh:"filtro por prefixo (opcional)",
-    nTitlePh:"título (1..200 caracteres)", nBodyPh:"texto (0..8192 caracteres)",
-    footer:"C11 · pool de threads · SQLite WAL · erros tipados — sem frameworks, sem CDN." },
+    mConn:"conexões", sessTitle:"Chamadas da sessão — só esta aba", colRoute:"endpoint", colTotal:"total",
+    sessHint:"Contagem real das requisições feitas nesta página, por modelo de endpoint e classe de status. Totais do servidor ficam nos cards acima (/metrics ao vivo).",
+    authTitle:"Auth — X-API-Key", save:"Salvar", forget:"Esquecer",
+    authHint:"Escritas (PUT/POST/DELETE em /api/) exigem a chave só com o servidor protegido (--api-key). Leituras são sempre públicas. Sem chave → 401, chave errada → 403 (comparação em tempo constante no servidor).",
+    tokenL:"token da api", tokenPh:"cole o token, ex. s3cret",
+    authWith:"PUT com chave salva → espera 200", authWithout:"PUT sem chave → espera 401/200", authWrong:"PUT com chave errada → espera 403/200",
+    openNote:"Servidor ABERTO (sem --api-key): demos de auth vão retornar 200. Reinicie com API key para ver 401/403 de verdade.",
+    inspTitle:"★ Inspetor — HTTP cru", execute:"Executar", clear:"Limpar",
+    inspHint:"Monte qualquer requisição na mão e dispare contra o servidor real. Tudo aqui embaixo também é rastreado: última chamada, histórico de 15 e curl gerado.",
+    pathL:"rota", headersL:"headers (um por linha)", bodyL:"corpo (bruto)",
+    kvTitle:"Armazenamento Chave–Valor", kvHint:"No SQLite. Campos já preenchidos — edite e execute.",
+    saveEx:"Salvar exemplo", getEx:"Buscar exemplo", delEx:"Apagar (confirma)", listEx:"Listar (limite 50)",
+    keyL:"chave", valL:"valor", prefixL:"prefixo", limitL:"limite",
+    notesTitle:"Notas", notesHint:"Linhas com id automático no SQLite. Pré-preenchido para criar em 1 clique.",
+    create:"CRIAR", update:"ATUALIZAR", titleL:"título", bodyL:"texto", delNote:"APAGAR (confirma)",
+    echoTitle:"Echo / laboratório de payload", send:"Enviar",
+    echoHint:"POST /api/echo devolve seu JSON intacto. Presets preenchem o disparo abaixo — inclusive inválidos e gigantes.",
+    pSmall:"JSON pequeno", pMulti:"vários campos", pLarge:"grande (~5KB)", pInvalid:"JSON inválido", pText:"texto puro",
+    errTitle:"Galeria de erros — quebre de propósito",
+    errHint:"Cada botão dispara uma requisição que o servidor deve rejeitar. Observe status, código de erro e a caixa auto-explain.",
+    eKey:"chave ruim → 400", eMissing:"campo ausente → 400", eId:"id ruim → 400", eGone:"chave morta → 404",
+    eMethod:"método errado → 405", eRoute:"rota inexistente → 404", eCT:"content-type errado → 415", eBig:"grande demais → 413",
+    linksTitle:"Atalhos", footer:"C API Server — todo botão acima bate no backend C de verdade. Sem mocks." },
   ru: { probing:"опрос /health…", mReq:"запросы", mErr:"ошибки", mKv:"ключи kv", mNotes:"заметки",
-    mConn:"соединения", kvTitle:"Хранилище ключ–значение", notesTitle:"Заметки", echoTitle:"Echo / проверка",
-    devTitle:"★ Dev Tools — инспектор запросов", linksTitle:"Ссылки",
-    devHint:"Каждая кнопка страницы отслеживается здесь: метод, путь, статус, время и тела запроса и ответа. Ошибки получают автоматическое объяснение на английском ниже. Впервые здесь? Нажмите «Run demo» — подставятся примеры и проверятся KV, Заметки и Echo целиком.",
-    kvHint:"Прямой CRUD в SQLite. «Sample» подставляет тестовый ключ для связки PUT → GET → DEL.",
-    notesHint:"Заметки с авто-id в SQLite. «Sample» заполняет заголовок + текст для создания в 1 клик.",
-    echoHint:"Отправляет любой JSON в POST /api/echo и показывает, что вернул C-сервер.",
-    list:"СПИСОК", create:"СОЗДАТЬ", update:"ОБНОВИТЬ", clear:"Очистить", sample:"Пример", runDemo:"▶ Демо",
-    keyL:"ключ", valL:"значение", prefixL:"префикс", titleL:"заголовок", bodyL:"текст",
-    kvKeyPh:"ключ  [A-Za-z0-9._-]{1,128}", kvValPh:"значение (строка JSON)", kvPrefixPh:"фильтр по префиксу (необязательно)",
-    nTitlePh:"заголовок (1..200 символов)", nBodyPh:"текст (0..8192 символов)",
-    footer:"C11 · пул потоков · SQLite WAL · типизированные ошибки — без фреймворков, без CDN." }
+    mConn:"соединения", sessTitle:"Вызовы сессии — только эта вкладка", colRoute:"эндпоинт", colTotal:"всего",
+    sessHint:"Реальные счётчики запросов с этой страницы по шаблону эндпоинта и классу статуса. Общие итоги сервера — в карточках выше (живой /metrics).",
+    authTitle:"Auth — X-API-Key", save:"Сохранить", forget:"Забыть",
+    authHint:"Запись (PUT/POST/DELETE в /api/) требует ключ, только если сервер защищён (--api-key). Чтение всегда открыто. Нет ключа → 401, неверный ключ → 403 (сравнение за константное время).",
+    tokenL:"токен api", tokenPh:"вставьте токен, напр. s3cret",
+    authWith:"PUT с ключом → ждём 200", authWithout:"PUT без ключа → ждём 401/200", authWrong:"PUT с чужим ключом → ждём 403/200",
+    openNote:"Сервер ОТКРЫТ (без --api-key): демо вернут 200. Перезапустите с ключом, чтобы увидеть настоящие 401/403.",
+    inspTitle:"★ Инспектор — сырой HTTP", execute:"Выполнить", clear:"Очистить",
+    inspHint:"Соберите любой запрос вручную и отправьте на настоящий сервер. Всё ниже тоже отслеживается: последний вызов, история из 15 и готовый curl.",
+    pathL:"путь", headersL:"заголовки (по одному в строке)", bodyL:"тело (сырое)",
+    kvTitle:"Хранилище ключ–значение", kvHint:"На SQLite. Поля предзаполнены — правьте и выполняйте.",
+    saveEx:"Сохранить пример", getEx:"Получить пример", delEx:"Удалить (спросит)", listEx:"Список (лимит 50)",
+    keyL:"ключ", valL:"значение", prefixL:"префикс", limitL:"лимит",
+    notesTitle:"Заметки", notesHint:"Строки с авто-id в SQLite. Предзаполнено для создания в 1 клик.",
+    create:"СОЗДАТЬ", update:"ОБНОВИТЬ", titleL:"заголовок", bodyL:"текст", delNote:"УДАЛИТЬ (спросит)",
+    echoTitle:"Echo / лаборатория", send:"Отправить",
+    echoHint:"POST /api/echo возвращает ваш JSON как есть. Пресеты заполняют отправку ниже — включая битые и огромные.",
+    pSmall:"малый JSON", pMulti:"много полей", pLarge:"большой (~5KB)", pInvalid:"битый JSON", pText:"простой текст",
+    errTitle:"Галерея ошибок — ломайте специально",
+    errHint:"Каждая кнопка шлёт запрос, который сервер обязан отклонить. Смотрите статус, код ошибки и auto-explain.",
+    eKey:"плохой ключ → 400", eMissing:"нет поля → 400", eId:"плохой id → 400", eGone:"нет ключа → 404",
+    eMethod:"не тот метод → 405", eRoute:"нет роута → 404", eCT:"не тот content-type → 415", eBig:"слишком большой → 413",
+    linksTitle:"Ссылки", footer:"C API Server — каждая кнопка бьёт в настоящий C-бэкенд. Без моков." }
+};
+/* Tooltips for fields/params/headers (title attributes, trilingual). */
+const TIPS = {
+  en: { key:"Letters, digits, dot, underscore, dash. 1–128 chars.", value:"Stored as a JSON string, up to ~60KB.",
+    prefix:"Only keys starting with this text. Empty = all.", limit:"1–100. The server rejects the rest with 400.",
+    title:"Required, 1–200 chars.", body:"Optional notes text, up to 8192 chars.", nid:"Positive integer id from CREATE.",
+    tok:"Sent as X-API-Key header on PUT/POST/DELETE. Stored only in this browser (localStorage).",
+    path:"Must start with /. Try /health, /metrics, /api/kv/demo …", hdrs:"One 'Name: value' header per line.",
+    rawbody:"Sent byte-for-byte. Invalid JSON is a valid test (expect 400)." },
+  pt: { key:"Letras, dígitos, ponto, underscore, traço. 1–128 caracteres.", value:"Guardado como string JSON, até ~60KB.",
+    prefix:"Só chaves que começam com este texto. Vazio = todas.", limit:"1–100. O resto o servidor rejeita com 400.",
+    title:"Obrigatório, 1–200 caracteres.", body:"Texto opcional, até 8192 caracteres.", nid:"Id inteiro positivo vindo do CREATE.",
+    tok:"Enviado como header X-API-Key em PUT/POST/DELETE. Fica só neste navegador (localStorage).",
+    path:"Deve começar com /. Tente /health, /metrics, /api/kv/demo …", hdrs:"Um header 'Nome: valor' por linha.",
+    rawbody:"Enviado byte a byte. JSON inválido é um teste válido (espere 400)." },
+  ru: { key:"Буквы, цифры, точка, подчёркивание, дефис. 1–128 символов.", value:"Хранится как строка JSON, до ~60KB.",
+    prefix:"Только ключи с этим началом. Пусто = все.", limit:"1–100. Остальное сервер отклонит с 400.",
+    title:"Обязательно, 1–200 символов.", body:"Необязательный текст, до 8192 символов.", nid:"Положительный id из CREATE.",
+    tok:"Шлётся заголовком X-API-Key в PUT/POST/DELETE. Только в этом браузере (localStorage).",
+    path:"Должен начинаться с /. Попробуйте /health, /metrics, /api/kv/demo …", hdrs:"Один заголовок 'Имя: значение' в строке.",
+    rawbody:"Шлётся как есть. Битый JSON — валидный тест (ждите 400)." }
 };
 let LANG = "en";
 function detectLang() {
@@ -228,14 +366,18 @@ function setLang(l) {
   if (!I18N[l]) l = "en";
   LANG = l;
   document.documentElement.lang = l;
-  const d = I18N[l];
+  const d = I18N[l], tips = TIPS[l];
   document.querySelectorAll("[data-i18n]").forEach(el => {
-    const k = el.getAttribute("data-i18n").replace(/2$|3$/, "");
+    const k = el.getAttribute("data-i18n");
     if (d[k] !== undefined) el.textContent = d[k];
   });
   document.querySelectorAll("[data-i18n-ph]").forEach(el => {
     const k = el.getAttribute("data-i18n-ph");
     if (d[k] !== undefined) el.placeholder = d[k];
+  });
+  document.querySelectorAll("[data-tip]").forEach(el => {
+    const k = el.getAttribute("data-tip");
+    if (tips[k] !== undefined) el.title = tips[k];
   });
   document.querySelectorAll("#langBtns button").forEach(b =>
     b.classList.toggle("active", b.getAttribute("data-lang") === l));
@@ -248,6 +390,8 @@ const EXPLAIN_STATUS = {
   201: "Created — a new row was stored in SQLite.",
   204: "No Content — deleted successfully; nothing to return.",
   400: "Bad Request — the server rejected the input.",
+  401: "Unauthorized — this write needs an X-API-Key header.",
+  403: "Forbidden — the key was sent but does not match.",
   404: "Not Found — this key, note or route does not exist.",
   405: "Wrong HTTP method — follow the Allow header (PUT for kv, POST for notes).",
   411: "PUT/POST needs a Content-Length header — fetch adds it automatically.",
@@ -262,6 +406,8 @@ const EXPLAIN_CODE = {
   invalid_id: "Note id must be a positive integer.",
   invalid_query: "Check limit (1–100) and offset (>= 0).",
   bad_request: "Malformed JSON, or title outside 1–200 chars.",
+  unauthorized: "Send header X-API-Key: <token>. Get the token from whoever runs the server.",
+  forbidden: "A key was sent but it is wrong. Check for typos.",
   not_found: "Nothing stored under that key/id.",
   method_not_allowed: "Use the method shown in the Allow header."
 };
@@ -273,9 +419,22 @@ function explain(status, bodyText) {
   } catch (e) { /* non-JSON body: status text is enough */ }
   return out;
 }
-/* ---------- request core with DevTools tracing ---------- */
+/* ---------- request core: real fetch + tracing ---------- */
+let APIKEY = "";
+try { APIKEY = localStorage.getItem("capi-key") || ""; } catch (e) { /* ignore */ }
 let LAST = null;
 const HIST = [];
+const SESS = {};
+function sessHit(label, status) {
+  const cls = status >= 200 && status < 300 ? "ok" : status >= 400 && status < 500 ? "c4" : "c5";
+  if (!SESS[label]) SESS[label] = { ok: 0, c4: 0, c5: 0 };
+  SESS[label][cls]++;
+  const rows = Object.keys(SESS).sort().map(k => {
+    const s = SESS[k], tot = s.ok + s.c4 + s.c5;
+    return "<tr><td>" + k + "</td><td>" + s.ok + "</td><td>" + s.c4 + "</td><td>" + s.c5 + "</td><td>" + tot + "</td></tr>";
+  });
+  document.getElementById("sessBody").innerHTML = rows.join("");
+}
 function trace(entry) {
   LAST = entry;
   HIST.unshift(entry);
@@ -283,34 +442,68 @@ function trace(entry) {
   const stamp = new Date().toLocaleTimeString();
   const last = document.getElementById("devLast");
   last.textContent =
-    entry.method + " " + entry.path + " → " + entry.status + " · " + entry.ms + "ms\n" +
+    entry.method + " " + entry.path + " → " + entry.status + " · " + entry.ms + "ms · " + entry.bytes + " bytes\n" +
     "-- request --\n" + (entry.reqBody || "(empty)") + "\n-- response --\n" + entry.respBody;
   last.scrollTop = last.scrollHeight;
   document.getElementById("devExplainTxt").textContent = explain(entry.status, entry.respBody);
   document.getElementById("devHist").textContent =
     HIST.map(h => stamp + "  " + h.method + " " + h.path + " → " + h.status + " · " + h.ms + "ms").join("\n");
+  sessHit(entry.label || (entry.method + " " + entry.path), entry.status);
 }
-async function req(method, path, body, ui) {
-  const show = ui !== false;
-  const opt = { method, headers: {} };
-  let raw = "";
-  if (body !== undefined) { raw = JSON.stringify(body); opt.headers["Content-Type"] = "application/json"; opt.body = raw; }
+function buildCurl(method, path, headers, raw) {
+  let cmd = "curl -X " + method + " " + location.origin + path;
+  Object.keys(headers).forEach(k => { cmd += " -H '" + k + ": " + headers[k] + "'"; });
+  if (raw) cmd += " -d '" + raw.replace(/'/g, "'\\''") + "'";
+  return cmd;
+}
+/* Raw fetch against the real server. Returns {status, ms, bytes, text}. */
+async function doFetch(method, path, raw, headers) {
+  const opt = { method, headers: Object.assign({}, headers) };
+  if (raw && method !== "GET" && method !== "DELETE") opt.body = raw;
   const t0 = performance.now();
   const r = await fetch(path, opt);
   const txt = await r.text();
-  const ms = Math.round(performance.now() - t0);
-  let parsed = txt;
-  try { parsed = JSON.stringify(JSON.parse(txt), null, 2); } catch (e) { /* keep raw */ }
-  if (show) {
-    trace({ method, path, reqBody: raw, status: r.status, ms, respBody: txt });
-    if (!r.ok) toast(r.status + " " + parsed);
+  return { status: r.status, ms: Math.round(performance.now() - t0), bytes: txt.length, text: txt };
+}
+/* JSON callers: body object is stringified, key auto-attached on writes. */
+async function req(method, path, body, ui, extra) {
+  const show = ui !== false;
+  const ex = extra || {};
+  const headers = Object.assign({}, ex.headers);
+  let raw = "";
+  if (body !== undefined) {
+    raw = JSON.stringify(body);
+    headers["Content-Type"] = "application/json";
   }
-  return { status: r.status, body: parsed };
+  if (!ex.noAuth && APIKEY && method !== "GET") headers["X-API-Key"] = APIKEY;
+  const res = await doFetch(method, path, raw, headers);
+  let pretty = res.text;
+  try { pretty = JSON.stringify(JSON.parse(res.text), null, 2); } catch (e) { /* keep raw */ }
+  if (show) {
+    trace({ method, path, reqBody: raw, headers, status: res.status, ms: res.ms,
+            bytes: res.bytes, respBody: res.text, label: ex.label });
+    if (res.status < 200 || res.status >= 300) toast(res.status + " " + pretty);
+  }
+  return { status: res.status, body: pretty, ms: res.ms, bytes: res.bytes };
+}
+/* Render one card result: status · ms · bytes + formatted body + ok/err frame. */
+function show(outId, res, label) {
+  const el = document.getElementById(outId);
+  el.textContent = res.status + " · " + res.ms + "ms · " + res.bytes + " bytes\n" + res.body;
+  el.classList.remove("ok", "err");
+  el.classList.add(res.status >= 200 && res.status < 300 ? "ok" : "err");
+}
+async function go(btn, fn) {
+  if (btn.disabled) return;
+  btn.disabled = true;
+  const old = btn.textContent;
+  btn.textContent = "…";
+  try { await window[fn](); } catch (e) { toast("network error: " + e); }
+  finally { btn.disabled = false; btn.textContent = old; }
 }
 function copyCurl() {
   if (!LAST) { toast("nothing to copy yet"); return; }
-  let cmd = "curl -X " + LAST.method + " " + location.origin + LAST.path;
-  if (LAST.reqBody) cmd += " -H 'Content-Type: application/json' -d '" + LAST.reqBody.replace(/'/g, "'\\''") + "'";
+  const cmd = buildCurl(LAST.method, LAST.path, LAST.headers || {}, LAST.reqBody);
   const done = () => toast("copied to clipboard", true);
   if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(cmd).then(done, () => toast(cmd));
   else toast(cmd);
@@ -319,36 +512,172 @@ function clearHist() {
   HIST.length = 0;
   document.getElementById("devHist").textContent = "—";
 }
-/* ---------- one-click sample data + demo flow ---------- */
-function fillKv() {
-  document.getElementById("kvKey").value = "demo";
-  document.getElementById("kvVal").value = "dark";
-  document.getElementById("kvKey").focus();
+/* ---------- auth section (real backend behavior) ---------- */
+function tokSave() {
+  APIKEY = document.getElementById("apiToken").value;
+  try { localStorage.setItem("capi-key", APIKEY); } catch (e) { /* ignore */ }
+  toast(APIKEY ? "token saved for this browser" : "token cleared", !!APIKEY);
 }
-function fillNote() {
-  document.getElementById("nTitle").value = "hello";
-  document.getElementById("nBody").value = "my first note via the console";
-  document.getElementById("nTitle").focus();
+function tokForget() {
+  APIKEY = "";
+  document.getElementById("apiToken").value = "";
+  try { localStorage.removeItem("capi-key"); } catch (e) { /* ignore */ }
+  toast("token forgotten");
 }
-function fillEcho() {
-  document.getElementById("echoIn").value = '{"data":"hello"}';
-  document.getElementById("echoIn").focus();
-}
-async function runDemo() {
-  fillKv(); fillNote(); fillEcho();
-  let r = await req("PUT", "/api/kv/demo", { value: "dark" });
-  document.getElementById("kvOut").textContent = r.status + "\n" + r.body;
-  r = await req("GET", "/api/kv/demo");
-  document.getElementById("kvOut").textContent = r.status + "\n" + r.body;
-  r = await req("POST", "/api/notes", { title: "hello", body: "my first note via the console" });
-  document.getElementById("nOut").textContent = r.status + "\n" + r.body;
-  r = await req("GET", "/api/notes?limit=5");
-  document.getElementById("nOut").textContent = r.status + "\n" + r.body;
-  r = await req("POST", "/api/echo", { data: "demo" });
-  document.getElementById("echoOut").textContent = r.status + "\n" + r.body;
+async function authWith() {
+  if (!APIKEY) { toast("save a token first"); return; }
+  const r = await req("PUT", "/api/kv/authdemo", { value: "ok" }, true, { label: "PUT /api/kv/:key (auth)" });
+  show("authOut", r);
   refresh(true);
-  toast("demo flow done — see Dev Tools above", true);
-  document.getElementById("devH").scrollIntoView();
+}
+async function authWithout() {
+  const r = await req("PUT", "/api/kv/authdemo", { value: "ok" }, true,
+                      { noAuth: true, label: "PUT /api/kv/:key (no key)" });
+  show("authOut", r);
+  refresh(true);
+}
+async function authWrong() {
+  const headers = { "X-API-Key": "definitely-wrong" };
+  const raw = JSON.stringify({ value: "ok" });
+  headers["Content-Type"] = "application/json";
+  const res = await doFetch("PUT", "/api/kv/authdemo", raw, headers);
+  let pretty = res.text;
+  try { pretty = JSON.stringify(JSON.parse(res.text), null, 2); } catch (e) { /* raw */ }
+  trace({ method: "PUT", path: "/api/kv/authdemo", reqBody: raw, headers, status: res.status,
+          ms: res.ms, bytes: res.bytes, respBody: res.text, label: "PUT /api/kv/:key (wrong key)" });
+  show("authOut", { status: res.status, body: pretty, ms: res.ms, bytes: res.bytes });
+  refresh(true);
+}
+/* ---------- inspector composer ---------- */
+function parseHeaders(text) {
+  const out = {};
+  const lines = text.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    const colon = line.indexOf(":");
+    if (colon <= 0) throw new Error("bad header line " + (i + 1) + ": " + line);
+    out[line.slice(0, colon).trim()] = line.slice(colon + 1).trim();
+  }
+  return out;
+}
+async function composerGo() {
+  const method = document.getElementById("cMethod").value;
+  const path = document.getElementById("cPath").value.trim() || "/";
+  let headers;
+  try { headers = parseHeaders(document.getElementById("cHeaders").value); }
+  catch (e) { toast("400 local: " + e.message); return; }
+  const raw = document.getElementById("cBody").value;
+  if (raw && !headers["Content-Type"] && !headers["content-type"])
+    headers["Content-Type"] = "application/json";
+  const res = await doFetch(method, path, raw, headers);
+  trace({ method, path, reqBody: raw, headers, status: res.status, ms: res.ms,
+          bytes: res.bytes, respBody: res.text, label: method + " " + path + " (composer)" });
+  if (res.status < 200 || res.status >= 300) toast(res.status + " " + res.text.slice(0, 200));
+  else toast(res.status + " · " + res.ms + "ms · " + res.bytes + " bytes", true);
+}
+/* ---------- endpoint cards (all prefilled, all editable) ---------- */
+function kvVals() {
+  return { key: document.getElementById("kvKey").value.trim(), val: document.getElementById("kvVal").value,
+           prefix: document.getElementById("kvPrefix").value.trim(), limit: document.getElementById("kvLimit").value.trim() || "50" };
+}
+async function kvPut() {
+  const v = kvVals();
+  const r = await req("PUT", "/api/kv/" + encodeURIComponent(v.key), { value: v.val }, true,
+                      { label: "PUT /api/kv/:key" });
+  show("kvOut", r); refresh(true);
+}
+async function kvGet() {
+  const v = kvVals();
+  const r = await req("GET", "/api/kv/" + encodeURIComponent(v.key), undefined, true, { label: "GET /api/kv/:key" });
+  show("kvOut", r);
+}
+async function kvDel() {
+  const v = kvVals();
+  if (!confirm('Delete key "' + v.key + '"?')) return;
+  const r = await req("DELETE", "/api/kv/" + encodeURIComponent(v.key), undefined, true,
+                      { label: "DELETE /api/kv/:key" });
+  show("kvOut", r); refresh(true);
+}
+async function kvList() {
+  const v = kvVals();
+  const r = await req("GET", "/api/kv?limit=" + encodeURIComponent(v.limit) +
+                      (v.prefix ? "&prefix=" + encodeURIComponent(v.prefix) : ""), undefined, true,
+                      { label: "GET /api/kv" });
+  show("kvOut", r);
+}
+function noteVals() {
+  return { title: document.getElementById("nTitle").value, body: document.getElementById("nBody").value,
+           id: document.getElementById("nId").value.trim() };
+}
+async function noteCreate() {
+  const v = noteVals();
+  const r = await req("POST", "/api/notes", { title: v.title, body: v.body }, true, { label: "POST /api/notes" });
+  show("nOut", r); refresh(true);
+}
+async function noteList() {
+  const r = await req("GET", "/api/notes?limit=50", undefined, true, { label: "GET /api/notes" });
+  show("nOut", r);
+}
+async function noteGet() {
+  const r = await req("GET", "/api/notes/" + encodeURIComponent(noteVals().id), undefined, true,
+                      { label: "GET /api/notes/:id" });
+  show("nOut", r);
+}
+async function noteUpdate() {
+  const v = noteVals();
+  const r = await req("PUT", "/api/notes/" + encodeURIComponent(v.id), { title: v.title, body: v.body }, true,
+                      { label: "PUT /api/notes/:id" });
+  show("nOut", r); refresh(true);
+}
+async function noteDel() {
+  const id = noteVals().id;
+  if (!confirm("Delete note " + id + "?")) return;
+  const r = await req("DELETE", "/api/notes/" + encodeURIComponent(id), undefined, true,
+                      { label: "DELETE /api/notes/:id" });
+  show("nOut", r); refresh(true);
+}
+/* ---------- echo lab: presets drive the raw sender ---------- */
+function echoPreset(kind) {
+  const body = document.getElementById("echoBody"), ct = document.getElementById("echoCT");
+  if (kind === "small") { body.value = '{"data":"hello"}'; ct.value = "application/json"; }
+  else if (kind === "multi") { body.value = '{"data":"hi","extra":{"tags":["a","b"],"n":42}}'; ct.value = "application/json"; }
+  else if (kind === "large") { body.value = '{"data":"' + "x".repeat(5000) + '"}'; ct.value = "application/json"; }
+  else if (kind === "invalid") { body.value = '{"data":oops}'; ct.value = "application/json"; }
+  else if (kind === "text") { body.value = "just plain text"; ct.value = "text/plain"; }
+  body.focus();
+}
+async function doEcho() {
+  const raw = document.getElementById("echoBody").value;
+  const ct = document.getElementById("echoCT").value;
+  const res = await doFetch("POST", "/api/echo", raw, { "Content-Type": ct });
+  let pretty = res.text;
+  try { pretty = JSON.stringify(JSON.parse(res.text), null, 2); } catch (e) { /* raw */ }
+  trace({ method: "POST", path: "/api/echo", reqBody: raw, status: res.status, ms: res.ms,
+          bytes: res.bytes, respBody: res.text, label: "POST /api/echo" });
+  show("echoOut", { status: res.status, body: pretty, ms: res.ms, bytes: res.bytes });
+}
+/* ---------- error gallery: intentional failures, real responses ---------- */
+async function errInto(outId, method, path, body, label) {
+  const r = await req(method, path, body, true, { label });
+  show(outId, r);
+}
+function errKey() { return errInto("errOut", "PUT", "/api/kv/bad$key", { value: "v" }, "PUT /api/kv/:key (bad key)"); }
+function errMissing() { return errInto("errOut", "PUT", "/api/kv/demo", { nope: 1 }, "PUT /api/kv/:key (missing)"); }
+function errId() { return errInto("errOut", "GET", "/api/notes/abc", undefined, "GET /api/notes/:id (bad id)"); }
+function errGone() { return errInto("errOut", "GET", "/api/kv/no-such-key", undefined, "GET /api/kv/:key (gone)"); }
+function errMethod() { return errInto("errOut", "POST", "/health", {}, "POST /health (method)"); }
+function errRoute() { return errInto("errOut", "GET", "/nope", undefined, "GET /nope (route)"); }
+async function errCT() {
+  const res = await doFetch("PUT", "/api/kv/demo", "hello", { "Content-Type": "text/plain" });
+  trace({ method: "PUT", path: "/api/kv/demo", reqBody: "hello", status: res.status, ms: res.ms,
+          bytes: res.bytes, respBody: res.text, label: "PUT /api/kv/:key (content-type)" });
+  show("errOut", { status: res.status, body: res.text, ms: res.ms, bytes: res.bytes });
+}
+async function errBig() {
+  const big = "x".repeat(70000);
+  const r = await req("PUT", "/api/kv/big", { value: big }, true, { label: "PUT /api/kv/:key (oversized)" });
+  show("errOut", r);
 }
 function toast(msg, ok) {
   const t = document.getElementById("toast");
@@ -360,8 +689,8 @@ function toast(msg, ok) {
 }
 async function refresh(silent) {
   try {
-    const h = await req("GET", "/health", undefined, !silent);
-    const m = await req("GET", "/metrics", undefined, false);
+    const h = await req("GET", "/health", undefined, !silent, { label: "GET /health" });
+    const m = await req("GET", "/metrics", undefined, false, { label: "GET /metrics" });
     const hj = JSON.parse(h.body), mj = JSON.parse(m.body);
     document.getElementById("dot").className = "dot ok";
     document.getElementById("healthLine").textContent =
@@ -371,68 +700,23 @@ async function refresh(silent) {
     document.getElementById("mKv").textContent = mj.kv_count;
     document.getElementById("mNotes").textContent = mj.notes_count;
     document.getElementById("mConn").textContent = mj.connections_accepted;
+    const mode = document.getElementById("authMode");
+    mode.textContent = hj.auth === "protected" ? "protected" : "open";
+    mode.className = "badge " + (hj.auth === "protected" ? "protected" : "open");
+    const notice = document.getElementById("authNotice");
+    if (hj.auth === "protected") { notice.hidden = true; }
+    else {
+      notice.hidden = false;
+      notice.textContent = I18N[LANG].openNote;
+    }
   } catch (e) {
     document.getElementById("dot").className = "dot bad";
     document.getElementById("healthLine").textContent = "unreachable: " + e;
   }
 }
-async function kvPut() {
-  const k = document.getElementById("kvKey").value.trim();
-  const v = document.getElementById("kvVal").value;
-  const r = await req("PUT", "/api/kv/" + encodeURIComponent(k), { value: v });
-  document.getElementById("kvOut").textContent = r.status + "\n" + r.body;
-  refresh(true);
-}
-async function kvGet() {
-  const k = document.getElementById("kvKey").value.trim();
-  const r = await req("GET", "/api/kv/" + encodeURIComponent(k));
-  document.getElementById("kvOut").textContent = r.status + "\n" + r.body;
-}
-async function kvDel() {
-  const k = document.getElementById("kvKey").value.trim();
-  const r = await req("DELETE", "/api/kv/" + encodeURIComponent(k));
-  document.getElementById("kvOut").textContent = r.status + "\n" + r.body;
-  refresh(true);
-}
-async function kvList() {
-  const p = document.getElementById("kvPrefix").value.trim();
-  const r = await req("GET", "/api/kv?limit=50" + (p ? "&prefix=" + encodeURIComponent(p) : ""));
-  document.getElementById("kvOut").textContent = r.status + "\n" + r.body;
-}
-async function noteCreate() {
-  const r = await req("POST", "/api/notes",
-    { title: document.getElementById("nTitle").value, body: document.getElementById("nBody").value });
-  document.getElementById("nOut").textContent = r.status + "\n" + r.body;
-  refresh(true);
-}
-async function noteList() {
-  const r = await req("GET", "/api/notes?limit=50");
-  document.getElementById("nOut").textContent = r.status + "\n" + r.body;
-}
-async function noteGet() {
-  const r = await req("GET", "/api/notes/" + document.getElementById("nId").value.trim());
-  document.getElementById("nOut").textContent = r.status + "\n" + r.body;
-}
-async function noteUpdate() {
-  const r = await req("PUT", "/api/notes/" + document.getElementById("nId").value.trim(),
-    { title: document.getElementById("nTitle").value, body: document.getElementById("nBody").value });
-  document.getElementById("nOut").textContent = r.status + "\n" + r.body;
-  refresh(true);
-}
-async function noteDel() {
-  const r = await req("DELETE", "/api/notes/" + document.getElementById("nId").value.trim());
-  document.getElementById("nOut").textContent = r.status + "\n" + r.body;
-  refresh(true);
-}
-async function doEcho() {
-  let payload;
-  try { payload = JSON.parse(document.getElementById("echoIn").value); }
-  catch (e) { toast("400 invalid JSON: " + e); return; }
-  const r = await req("POST", "/api/echo", payload);
-  document.getElementById("echoOut").textContent = r.status + "\n" + r.body;
-}
 document.querySelectorAll("#langBtns button").forEach(b =>
   b.addEventListener("click", () => setLang(b.getAttribute("data-lang"))));
+document.getElementById("apiToken").value = APIKEY;
 document.getElementById("healthLine").textContent = I18N[detectLang()].probing;
 setLang(detectLang());
 refresh(false);
