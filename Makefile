@@ -45,10 +45,9 @@ $(TEST_BIN): $(SERVER_OBJ_NO_MAIN) tests/test_server.c | build
 	$(CC) $(CFLAGS) $(SERVER_OBJ_NO_MAIN) tests/test_server.c -o $@ $(LDFLAGS)
 
 # ASan+UBSan build + run. Fails on leak/UB. Threading is exercised here as well.
-sanitize: CFLAGS += -fsanitize=address,undefined -fno-omit-frame-pointer
-sanitize: LDFLAGS += -fsanitize=address,undefined
-sanitize: clean
-sanitize: $(BIN) $(TEST_BIN)
+sanitize:
+	$(MAKE) clean
+	$(MAKE) $(BIN) $(TEST_BIN) CFLAGS="$(CFLAGS) -fsanitize=address,undefined -fno-omit-frame-pointer" LDFLAGS="$(LDFLAGS) -fsanitize=address,undefined"
 	./$(TEST_BIN)
 	@echo "[sanitize] test_server passed under ASan+UBSan"
 
