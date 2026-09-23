@@ -1,13 +1,13 @@
 /*
- * server.c - Bounded thread-pool TCP echo server.
+ * server.c - Bounded thread-pool HTTP API server (SQLite-backed).
  *
  * Concurrency model: acceptor thread (server_run caller) + N workers.
  * Justification: bounded threads + bounded queue give backpressure and
  * predictable memory; simpler and race-auditable vs epoll for this scale.
- * See docs/ADR-001-concurrency-model.md.
+ * See docs/ADR-001-concurrency-model.md and docs/ADR-002-http-sqlite.md.
  *
- * Hot path: stack buffer (no malloc), one recv/send per iteration,
- * short mutex scope only for queue ops. Stats are lock-free atomics.
+ * Hot path: stack buffers (no malloc per request), short mutex scope only
+ * for queue ops. Store and stats use internal locks/atomics.
  */
 
 #include "server.h"
@@ -25,9 +25,13 @@
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <poll.h>
+#include <time.h>
 #include <unistd.h>
 
+#include "api.h"
+#include "http.h"
 #include "log.h"
+#include "store.h"
 
 #define MODULE "server"
 #define MAX_THREADS 64
@@ -54,14 +58,12 @@ struct Server {
     int worker_count;
     struct ConnQueue queue;
     struct ServerStats stats;
+    Store *store;
+    time_t start_time;
 };
 
 static void stats_bump(atomic_ulong *counter) {
     atomic_fetch_add_explicit(counter, 1UL, memory_order_relaxed);
-}
-
-static void stats_add(atomic_ulong *counter, unsigned long value) {
-    atomic_fetch_add_explicit(counter, value, memory_order_relaxed);
 }
 
 static int queue_init(struct ConnQueue *queue, int capacity) {
@@ -176,6 +178,10 @@ bool server_config_validate(const ServerConfig *config) {
         errno = EINVAL;
         return false;
     }
+    if (config->db_path == NULL || config->db_path[0] == '\0') {
+        errno = EINVAL;
+        return false;
+    }
     return true;
 }
 
@@ -239,28 +245,26 @@ static void handle_client(Server *server, int client_fd, const char *peer) {
     if (set_timeouts(client_fd) != 0) {
         LOG_ERROR_PEER(MODULE, "setsockopt timeout failed", peer);
         stats_bump(&server->stats.errors);
+        stats_bump(&server->stats.http_errors);
         return;
     }
-    /* Stack buffer: zero allocs in hot path, cache-friendly, bounded. */
-    char buffer[SERVER_IO_BUFFER_SIZE];
-    for (;;) {
-        ssize_t received = recv(client_fd, buffer, sizeof(buffer), 0);
-        if (received < 0) {
-            if (errno == EINTR) {
-                continue;
-            }
-            /* Timeout/EAGAIN/ECONNRESET are normal peer conditions: count, do not crash. */
-            stats_bump(&server->stats.errors);
-            return;
-        }
-        if (received == 0) {
-            return; /* Clean EOF. */
-        }
-        if (server_send_all(client_fd, buffer, (size_t)received) != 0) {
-            stats_bump(&server->stats.errors);
-            return;
-        }
-        stats_add(&server->stats.echo_bytes, (unsigned long)received);
+    /* One HTTP request per connection (Connection: close). Stack buffers only. */
+    static _Thread_local char header_buf[HTTP_MAX_HEADERS_SIZE];
+    static _Thread_local char body_buf[HTTP_MAX_BODY_SIZE];
+    HttpRequest req;
+    memset(&req, 0, sizeof(req));
+    ApiError read_result = http_read_request(client_fd, header_buf, sizeof(header_buf), body_buf,
+                                             sizeof(body_buf), &req);
+    if (read_result != API_OK) {
+        stats_bump(&server->stats.errors);
+        stats_bump(&server->stats.http_errors);
+        http_respond_error(client_fd, read_result, api_error_code(read_result));
+        return;
+    }
+    stats_bump(&server->stats.http_requests);
+    ApiError dispatch = api_dispatch(client_fd, &req, server->store, server);
+    if (dispatch != API_OK) {
+        stats_bump(&server->stats.http_errors);
     }
 }
 
@@ -339,8 +343,21 @@ Server *server_create(const ServerConfig *config) {
     atomic_init(&server->stats.connections_dropped_queue_full, 0UL);
     atomic_init(&server->stats.echo_bytes, 0UL);
     atomic_init(&server->stats.errors, 0UL);
+    atomic_init(&server->stats.http_requests, 0UL);
+    atomic_init(&server->stats.http_errors, 0UL);
+    server->start_time = time(NULL);
     if (queue_init(&server->queue, config->queue_size) != 0) {
         free(server);
+        return NULL;
+    }
+    /* No fallback: DB failure fails creation explicitly. */
+    char db_err[512] = "";
+    server->store = store_open(config->db_path, db_err, sizeof(db_err));
+    if (server->store == NULL) {
+        LOG_ERROR(MODULE, "store_open failed");
+        queue_destroy(&server->queue);
+        free(server);
+        errno = EIO;
         return NULL;
     }
     return server;
@@ -363,6 +380,8 @@ void server_destroy(Server *server) {
     if (server == NULL) {
         return;
     }
+    store_close(server->store);
+    server->store = NULL;
     queue_destroy(&server->queue);
     free(server->workers);
     server->workers = NULL;
@@ -382,6 +401,19 @@ void server_stats(Server *server, struct ServerStats *out) {
         atomic_load_explicit(&server->stats.connections_dropped_queue_full, memory_order_relaxed);
     out->echo_bytes = atomic_load_explicit(&server->stats.echo_bytes, memory_order_relaxed);
     out->errors = atomic_load_explicit(&server->stats.errors, memory_order_relaxed);
+    out->http_requests = atomic_load_explicit(&server->stats.http_requests, memory_order_relaxed);
+    out->http_errors = atomic_load_explicit(&server->stats.http_errors, memory_order_relaxed);
+}
+
+long server_uptime_s(Server *server) {
+    if (server == NULL) {
+        return 0;
+    }
+    time_t now = time(NULL);
+    if (now < server->start_time) {
+        return 0;
+    }
+    return (long)(now - server->start_time);
 }
 
 int server_run(Server *server) {

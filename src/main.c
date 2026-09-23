@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #include "log.h"
 #include "server.h"
@@ -18,9 +19,9 @@ static Server *g_server = NULL;
 
 static void print_usage(const char *program) {
     fprintf(stderr,
-            "Usage: %s [--bind IP] [--port PORT] [--threads N]\n"
-            "Env: BIND_IP, PORT, THREADS (CLI overrides env)\n"
-            "Defaults: bind=0.0.0.0 port=8080 threads=8\n",
+            "Usage: %s [--bind IP] [--port PORT] [--threads N] [--db PATH]\n"
+            "Env: BIND_IP, PORT, THREADS, DB_PATH (CLI overrides env)\n"
+            "Defaults: bind=0.0.0.0 port=8080 threads=8 db=./data/app.db\n",
             program);
 }
 
@@ -61,13 +62,46 @@ static int parse_positive(const char *text, int *out, int max_value) {
     return 0;
 }
 
+/* Create parent directories for the DB path (mkdir -p equivalent). */
+static int ensure_db_dir(const char *db_path) {
+    if (db_path == NULL || db_path[0] == '\0') {
+        return -1;
+    }
+    char dir[1024];
+    snprintf(dir, sizeof(dir), "%s", db_path);
+    char *slash = strrchr(dir, '/');
+    if (slash == NULL) {
+        return 0; /* Bare filename: current directory exists. */
+    }
+    *slash = '\0';
+    if (dir[0] == '\0') {
+        return 0;
+    }
+    /* Walk components so nested paths work. */
+    for (char *p = dir + 1; *p != '\0'; p++) {
+        if (*p == '/') {
+            *p = '\0';
+            mkdir(dir, 0755);
+            *p = '/';
+        }
+    }
+    if (mkdir(dir, 0755) != 0 && errno != EEXIST) {
+        return -1;
+    }
+    return 0;
+}
+
 int main(int argc, char *argv[]) {
     const char *bind_ip = getenv("BIND_IP");
     const char *port_text = getenv("PORT");
     const char *threads_text = getenv("THREADS");
+    const char *db_path = getenv("DB_PATH");
 
     if (bind_ip == NULL || bind_ip[0] == '\0') {
         bind_ip = "0.0.0.0";
+    }
+    if (db_path == NULL || db_path[0] == '\0') {
+        db_path = SERVER_DEFAULT_DB;
     }
     uint16_t port = SERVER_DEFAULT_PORT;
     int threads = SERVER_DEFAULT_THREADS;
@@ -95,6 +129,13 @@ int main(int argc, char *argv[]) {
                 print_usage(argv[0]);
                 return 2;
             }
+        } else if ((strcmp(argv[i], "--db") == 0) && i + 1 < argc) {
+            db_path = argv[++i];
+            if (db_path[0] == '\0') {
+                fprintf(stderr, "error: invalid --db value\n");
+                print_usage(argv[0]);
+                return 2;
+            }
         } else if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
             print_usage(argv[0]);
             return 0;
@@ -118,7 +159,12 @@ int main(int argc, char *argv[]) {
         .thread_count = threads,
         .backlog = SERVER_DEFAULT_BACKLOG,
         .queue_size = SERVER_DEFAULT_QUEUE_SIZE,
+        .db_path = db_path,
     };
+    if (ensure_db_dir(db_path) != 0) {
+        fprintf(stderr, "error: cannot create db directory for: %s\n", db_path);
+        return 2;
+    }
     Server *server = server_create(&config);
     if (server == NULL) {
         fprintf(stderr, "error: server_create failed: %s\n", strerror(errno));
@@ -135,8 +181,9 @@ int main(int argc, char *argv[]) {
     /* Avoid SIGPIPE killing the process on peer reset; send() uses MSG_NOSIGNAL too. */
     signal(SIGPIPE, SIG_IGN);
 
-    char startup[128];
-    snprintf(startup, sizeof(startup), "listening (bind=%s port=%u threads=%d)", bind_ip, (unsigned)port, threads);
+    char startup[256];
+    snprintf(startup, sizeof(startup), "listening (bind=%s port=%u threads=%d db=%s)", bind_ip, (unsigned)port,
+             threads, db_path);
     LOG_INFO("main", startup);
 
     int result = server_run(server);

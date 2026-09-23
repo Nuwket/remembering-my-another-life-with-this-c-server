@@ -71,6 +71,7 @@ static ServerConfig valid_config(uint16_t port) {
     config.thread_count = 4;
     config.backlog = 16;
     config.queue_size = 16;
+    config.db_path = ":memory:";
     return config;
 }
 
@@ -78,6 +79,15 @@ static int test_config_validate_null_returns_false(void) {
     errno = 0;
     EXPECT_TRUE(!server_config_validate(NULL));
     EXPECT_EQ_INT(errno, EINVAL);
+    return 0;
+}
+
+static int test_config_validate_missing_db_returns_false(void) {
+    ServerConfig config = valid_config(18080);
+    config.db_path = NULL;
+    EXPECT_TRUE(!server_config_validate(&config));
+    config.db_path = "";
+    EXPECT_TRUE(!server_config_validate(&config));
     return 0;
 }
 
@@ -239,42 +249,6 @@ static int client_connect(uint16_t port) {
     return fd;
 }
 
-static int recv_exact(int fd, void *buf, size_t len, int timeout_ms) {
-    uint8_t *cursor = (uint8_t *)buf;
-    size_t remaining = len;
-    struct timespec deadline;
-    clock_gettime(CLOCK_MONOTONIC, &deadline);
-    deadline.tv_sec += timeout_ms / 1000;
-    deadline.tv_nsec += (long)(timeout_ms % 1000) * 1000000L;
-    if (deadline.tv_nsec >= 1000000000L) {
-        deadline.tv_sec += 1;
-        deadline.tv_nsec -= 1000000000L;
-    }
-    while (remaining > 0) {
-        ssize_t got = recv(fd, cursor, remaining, 0);
-        if (got < 0) {
-            if (errno == EINTR) {
-                continue;
-            }
-            return -1;
-        }
-        if (got == 0) {
-            errno = ECONNRESET;
-            return -1;
-        }
-        cursor += (size_t)got;
-        remaining -= (size_t)got;
-        struct timespec now;
-        clock_gettime(CLOCK_MONOTONIC, &now);
-        if (remaining > 0 && (now.tv_sec > deadline.tv_sec ||
-                              (now.tv_sec == deadline.tv_sec && now.tv_nsec >= deadline.tv_nsec))) {
-            errno = ETIMEDOUT;
-            return -1;
-        }
-    }
-    return 0;
-}
-
 typedef struct {
     Server *server;
     pthread_t thread;
@@ -338,60 +312,100 @@ static void test_server_cleanup_args(void) {
     g_args_count = 0;
 }
 
-/* ---------------- integration: behavior ---------------- */
+/* ---------------- integration: HTTP behavior ---------------- */
 
-static int test_echo_single_client_returns_same_bytes(void) {
+/* Send a raw HTTP request and read until server closes (Connection: close). */
+static int http_request_response(uint16_t port, const char *request, char *resp, size_t cap) {
+    if (cap == 0) {
+        return -1;
+    }
+    int fd = client_connect(port);
+    if (fd < 0) {
+        return -1;
+    }
+    size_t req_len = strlen(request);
+    if (server_send_all(fd, request, req_len) != 0) {
+        close(fd);
+        return -1;
+    }
+    size_t total = 0;
+    for (;;) {
+        if (total + 1 >= cap) {
+            close(fd);
+            errno = EMSGSIZE;
+            return -1;
+        }
+        ssize_t got = recv(fd, resp + total, cap - 1 - total, 0);
+        if (got < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            close(fd);
+            return -1;
+        }
+        if (got == 0) {
+            break;
+        }
+        total += (size_t)got;
+    }
+    resp[total] = '\0';
+    close(fd);
+    return 0;
+}
+
+static int test_http_health_returns_ok(void) {
     TestServer test_server;
     memset(&test_server, 0, sizeof(test_server));
     EXPECT_TRUE(test_server_start_tracked(&test_server, 18090) == 0);
-    int fd = client_connect(18090);
-    EXPECT_TRUE(fd >= 0);
-    const char payload[] = "hello-echo-1";
-    EXPECT_TRUE(server_send_all(fd, payload, sizeof(payload)) == 0);
-    char echo[sizeof(payload)];
-    EXPECT_TRUE(recv_exact(fd, echo, sizeof(echo), 2000) == 0);
-    EXPECT_EQ_MEM(payload, echo, sizeof(payload));
-    close(fd);
+    char resp[4096];
+    EXPECT_TRUE(http_request_response(18090, "GET /health HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n",
+                                      resp, sizeof(resp)) == 0);
+    EXPECT_TRUE(strstr(resp, "200 OK") != NULL);
+    EXPECT_TRUE(strstr(resp, "\"status\":\"ok\"") != NULL);
     EXPECT_TRUE(test_server_stop(&test_server) == 0);
     return 0;
 }
 
-static int test_echo_large_payload_spanning_buffers(void) {
+static int test_http_kv_put_get_roundtrip(void) {
     TestServer test_server;
     memset(&test_server, 0, sizeof(test_server));
     EXPECT_TRUE(test_server_start_tracked(&test_server, 18091) == 0);
-    int fd = client_connect(18091);
-    EXPECT_TRUE(fd >= 0);
-    static char payload[65536];
-    for (size_t i = 0; i < sizeof(payload); i++) {
-        payload[i] = (char)('A' + (i % 26));
-    }
-    EXPECT_TRUE(server_send_all(fd, payload, sizeof(payload)) == 0);
-    static char echo[65536];
-    EXPECT_TRUE(recv_exact(fd, echo, sizeof(echo), 5000) == 0);
-    EXPECT_EQ_MEM(payload, echo, sizeof(payload));
-    close(fd);
+    char resp[8192];
+    const char *body = "{\"value\":\"dark\"}";
+    char put[1024];
+    snprintf(put, sizeof(put),
+             "PUT /api/kv/theme HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: "
+             "%zu\r\nConnection: close\r\n\r\n%s",
+             strlen(body), body);
+    EXPECT_TRUE(http_request_response(18091, put, resp, sizeof(resp)) == 0);
+    EXPECT_TRUE(strstr(resp, "200 OK") != NULL);
+    EXPECT_TRUE(strstr(resp, "\"dark\"") != NULL);
+    EXPECT_TRUE(http_request_response(18091,
+                                      "GET /api/kv/theme HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n",
+                                      resp, sizeof(resp)) == 0);
+    EXPECT_TRUE(strstr(resp, "200 OK") != NULL);
+    EXPECT_TRUE(strstr(resp, "\"dark\"") != NULL);
+    EXPECT_TRUE(http_request_response(18091,
+                                      "GET /api/kv/missing HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: "
+                                      "close\r\n\r\n",
+                                      resp, sizeof(resp)) == 0);
+    EXPECT_TRUE(strstr(resp, "404") != NULL);
     EXPECT_TRUE(test_server_stop(&test_server) == 0);
     return 0;
 }
 
-static int test_echo_peer_abrupt_disconnect_server_survives(void) {
+static int test_http_peer_abrupt_disconnect_server_survives(void) {
     TestServer test_server;
     memset(&test_server, 0, sizeof(test_server));
     EXPECT_TRUE(test_server_start_tracked(&test_server, 18092) == 0);
     int rude = client_connect(18092);
     EXPECT_TRUE(rude >= 0);
     close(rude); /* no data, abrupt close */
-    /* Server must still serve the next client. Readiness-poll again. */
     EXPECT_TRUE(wait_until_connectable(18092, 2000) == 0);
-    int fd = client_connect(18092);
-    EXPECT_TRUE(fd >= 0);
-    const char payload[] = "after-disconnect";
-    EXPECT_TRUE(server_send_all(fd, payload, sizeof(payload)) == 0);
-    char echo[sizeof(payload)];
-    EXPECT_TRUE(recv_exact(fd, echo, sizeof(echo), 2000) == 0);
-    EXPECT_EQ_MEM(payload, echo, sizeof(payload));
-    close(fd);
+    char resp[4096];
+    EXPECT_TRUE(http_request_response(18092, "GET /health HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n",
+                                      resp, sizeof(resp)) == 0);
+    EXPECT_TRUE(strstr(resp, "200 OK") != NULL);
     EXPECT_TRUE(test_server_stop(&test_server) == 0);
     return 0;
 }
@@ -404,32 +418,17 @@ typedef struct {
 
 static void *client_worker(void *arg) {
     ClientWorkerArg *worker = (ClientWorkerArg *)arg;
-    int fd = client_connect(worker->port);
-    if (fd < 0) {
+    char resp[4096];
+    if (http_request_response(worker->port,
+                              "GET /health HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n", resp,
+                              sizeof(resp)) != 0 ||
+        strstr(resp, "200 OK") == NULL) {
         worker->failed = 1;
-        return NULL;
     }
-    char payload[256];
-    memset(payload, 0, sizeof(payload));
-    snprintf(payload, sizeof(payload), "client-%d-payload", worker->index);
-    size_t len = strlen(payload) + 1;
-    if (server_send_all(fd, payload, len) != 0) {
-        worker->failed = 1;
-        close(fd);
-        return NULL;
-    }
-    char echo[256];
-    memset(echo, 0, sizeof(echo));
-    if (recv_exact(fd, echo, len, 3000) != 0 || memcmp(payload, echo, len) != 0) {
-        worker->failed = 1;
-        close(fd);
-        return NULL;
-    }
-    close(fd);
     return NULL;
 }
 
-static int test_echo_concurrent_clients_all_succeed(void) {
+static int test_http_concurrent_clients_all_succeed(void) {
     TestServer test_server;
     memset(&test_server, 0, sizeof(test_server));
     EXPECT_TRUE(test_server_start_tracked(&test_server, 18093) == 0);
@@ -452,6 +451,7 @@ static int test_echo_concurrent_clients_all_succeed(void) {
 
 int main(void) {
     RUN_TEST(test_config_validate_null_returns_false);
+    RUN_TEST(test_config_validate_missing_db_returns_false);
     RUN_TEST(test_config_validate_zero_port_returns_false);
     RUN_TEST(test_config_validate_bad_threads_returns_false);
     RUN_TEST(test_config_validate_bad_queue_returns_false);
@@ -462,10 +462,10 @@ int main(void) {
     RUN_TEST(test_send_all_null_buf_with_len_returns_error);
     RUN_TEST(test_send_all_invalid_fd_returns_error);
     RUN_TEST(test_send_all_socketpair_roundtrip);
-    RUN_TEST(test_echo_single_client_returns_same_bytes);
-    RUN_TEST(test_echo_large_payload_spanning_buffers);
-    RUN_TEST(test_echo_peer_abrupt_disconnect_server_survives);
-    RUN_TEST(test_echo_concurrent_clients_all_succeed);
+    RUN_TEST(test_http_health_returns_ok);
+    RUN_TEST(test_http_kv_put_get_roundtrip);
+    RUN_TEST(test_http_peer_abrupt_disconnect_server_survives);
+    RUN_TEST(test_http_concurrent_clients_all_succeed);
     test_server_cleanup_args();
     printf("\n%d passed, %d failed\n", g_passed, g_failed);
     return g_failed == 0 ? 0 : 1;
