@@ -1,0 +1,27 @@
+# Build artifacts
+build/
+*.o
+*.a
+*.so
+server
+server_asan
+test_server
+test_server_asan
+
+# Sanitizer / coverage
+*.gcda
+*.gcno
+*.gcov
+asan.log*
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs / local
+*.log
+.env
