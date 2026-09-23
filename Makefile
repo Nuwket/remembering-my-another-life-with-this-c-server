@@ -2,7 +2,8 @@ CC ?= gcc
 CSTD := -std=c11 -D_POSIX_C_SOURCE=200809L -D_DEFAULT_SOURCE
 WARN := -Wall -Wextra -Werror -Wconversion -Wshadow -pedantic
 OPT := -O2 -g
-INCLUDES := -Iinclude -Ibuild
+BUILD_DIR ?= build
+INCLUDES := -Iinclude -I$(BUILD_DIR)
 THREADS := -pthread
 
 CFLAGS ?= $(CSTD) $(WARN) $(OPT) $(INCLUDES) $(THREADS)
@@ -10,15 +11,15 @@ LDFLAGS ?= $(THREADS)
 LDLIBS ?= -lsqlite3
 
 SRC := $(wildcard src/*.c)
-OBJ := $(patsubst src/%.c,build/%.o,$(SRC))
-BIN := build/server
+OBJ := $(patsubst src/%.c,$(BUILD_DIR)/%.o,$(SRC))
+BIN := $(BUILD_DIR)/server
 
 TEST_SRC := $(wildcard tests/*.c)
 # Exclude test files that define their own main from lib objects when linking tests.
 # We link server objects (except main.o) + one test main at a time via explicit rules below.
-SERVER_OBJ_NO_MAIN := $(filter-out build/main.o,$(OBJ))
-TEST_BIN := build/test_server
-TEST_API_BIN := build/test_api
+SERVER_OBJ_NO_MAIN := $(filter-out $(BUILD_DIR)/main.o,$(OBJ))
+TEST_BIN := $(BUILD_DIR)/test_server
+TEST_API_BIN := $(BUILD_DIR)/test_api
 
 PREFIX ?= /usr/local
 BINDIR := $(PREFIX)/bin
@@ -32,42 +33,39 @@ RUN_DB ?= ./data/app.db
 
 all: $(BIN)
 
-build/%.o: src/%.c | build
+$(BUILD_DIR)/%.o: src/%.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # Embedded frontend: generated header keeps the binary self-contained
 # (no runtime dependency on the web/ directory).
-build/frontend.h: web/index.html scripts/embed.py | build
+$(BUILD_DIR)/frontend.h: web/index.html scripts/embed.py | $(BUILD_DIR)
 	python3 scripts/embed.py web/index.html $@ frontend_html
 
-build/api.o: build/frontend.h
+$(BUILD_DIR)/api.o: $(BUILD_DIR)/frontend.h
 
 $(BIN): $(OBJ)
 	$(CC) $(CFLAGS) $(OBJ) -o $@ $(LDFLAGS) $(LDLIBS)
 
-build:
-	mkdir -p build
+$(BUILD_DIR):
+	mkdir -p $(BUILD_DIR)
 
 clean:
-	rm -rf build
+	rm -rf build build-asan
 
 # Unit + integration tests (C, sqlite linked).
 test: $(TEST_BIN) $(TEST_API_BIN)
 	./$(TEST_BIN)
 	@if [ -x ./$(TEST_API_BIN) ]; then ./$(TEST_API_BIN); fi
 
-$(TEST_BIN): $(SERVER_OBJ_NO_MAIN) tests/test_server.c | build
+$(TEST_BIN): $(SERVER_OBJ_NO_MAIN) tests/test_server.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) $(SERVER_OBJ_NO_MAIN) tests/test_server.c -o $@ $(LDFLAGS) $(LDLIBS)
 
-$(TEST_API_BIN): $(SERVER_OBJ_NO_MAIN) tests/test_api.c | build
+$(TEST_API_BIN): $(SERVER_OBJ_NO_MAIN) tests/test_api.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) $(SERVER_OBJ_NO_MAIN) tests/test_api.c -o $@ $(LDFLAGS) $(LDLIBS)
 
-# ASan+UBSan build + run. Fails on leak/UB. Threading is exercised here as well.
+# ASan+UBSan in an isolated dir so instrumented objects never mix with normal ones.
 sanitize:
-	$(MAKE) clean
-	$(MAKE) $(BIN) $(TEST_BIN) $(TEST_API_BIN) CFLAGS="$(CFLAGS) -fsanitize=address,undefined -fno-omit-frame-pointer" LDFLAGS="$(LDFLAGS) -fsanitize=address,undefined"
-	./$(TEST_BIN)
-	@if [ -x ./$(TEST_API_BIN) ]; then ./$(TEST_API_BIN); fi
+	$(MAKE) BUILD_DIR=build-asan test CFLAGS="$(CFLAGS) -fsanitize=address,undefined -fno-omit-frame-pointer" LDFLAGS="$(LDFLAGS) -fsanitize=address,undefined"
 	@echo "[sanitize] tests passed under ASan+UBSan"
 
 format-check:
