@@ -74,23 +74,27 @@ drains, workers join, WAL checkpoints, `stopped cleanly` is logged.
  Notes:    http://127.0.0.1:8080/api/notes?limit=50
 ```
 
-## Playground frontend (`GET /`)
+## Lab frontend (`GET /`)
 
-The binary embeds a zero-dependency API playground (`web/index.html` via
+The binary embeds a zero-dependency interactive lab (`web/index.html` via
 `scripts/embed.py`, no CWD dependency). No mocks: every control calls the
-live C backend.
+live C backend. Rule of the page: function first, tech second — anyone can
+use it without knowing what an API is.
 
-- Per-endpoint cards with method badge, route, what-it-tests, prefilled
-  editable inputs, execute buttons, and `status · ms · bytes` + formatted
-  JSON output with ok/err frames.
-- Raw HTTP inspector: hand-built method/path/headers/body composer, last-call
-  detail, 15-entry history, auto-generated curl with copy button.
-- Auth section: token vault (browser `localStorage` only), with/without/wrong
-  key demos, live open/protected badge from `/health`.
-- Echo payload lab with presets (small, multi-field, ~5KB, invalid, plain
-  text) and an error gallery firing real rejections (400, 404, 405, 413, 415).
-- Live `/metrics` cards plus an honest this-tab session matrix (client-side
-  counts, labeled as such).
+- **Save/fetch/delete flow** with human verdicts ("the server saved it"),
+  visual note cards with edit/delete, vault narrative that adapts to
+  open/protected mode, echo as an experience, and a 6-card error gallery.
+- **Performance runner:** 1/10/100 real requests with total/average timing,
+  measured in the browser, nothing faked.
+- **How-it-works** expandables per feature plus a collapsed **tech mode**
+  (raw HTTP composer, last-call detail, history, curl copy, session matrix).
+- **Language comparison:** per-function tabs (save/get/del/note/echo/auth)
+  across C/Python/Go/Rust/Node with side-by-side view, copy buttons, LOC and
+  explicit library labels. C tabs show real shortened snippets from this
+  server's `src/`; every other tab is labeled "equivalent example — NOT
+  executed here". A languages section adds descriptive per-language notes and
+  an honest piece-by-piece matrix (HTTP/JSON/SQLite/errors/concurrency/
+  memory). UI in EN/PT/RU via `navigator.language`.
 
 ## Auth
 
