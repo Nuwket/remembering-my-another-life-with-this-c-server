@@ -25,3 +25,10 @@ asan.log*
 # Logs / local
 *.log
 .env
+
+# Runtime local storage (SQLite)
+data/
+*.db
+*.db-wal
+*.db-shm
+/tmp/capi_*.db*
