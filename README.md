@@ -63,6 +63,32 @@ make run RUN_PORT=8081 RUN_DB=./data/dev.db
 Stop with `Ctrl-C` (SIGINT) or `kill -TERM <pid>`: listener closes, queue
 drains, workers join, WAL checkpoints, `stopped cleanly` is logged.
 
+`make run` prints a banner with clickable shortcuts:
+
+```
+ C API Server v0.2.0 running
+ App:      http://127.0.0.1:8080/
+ Health:   http://127.0.0.1:8080/health
+ Metrics:  http://127.0.0.1:8080/metrics
+ KV:       http://127.0.0.1:8080/api/kv?limit=50
+ Notes:    http://127.0.0.1:8080/api/notes?limit=50
+```
+
+## Console frontend (`GET /`)
+
+The binary embeds a zero-dependency console (`web/index.html` via
+`scripts/embed.py`, no CWD dependency): live health dot, metrics cards with
+5s refresh, KV CRUD, Notes CRUD, echo probe, and shortcut links.
+
+- **Dev Tools panel:** traces the last request (method, path, status, ms,
+  request/response bodies), keeps a 15-entry history, and copies any request
+  as a `curl` command.
+- **Auto-explain (English):** every response is mapped to a plain-English
+  cause plus fix (status codes and `error` codes like `missing_field`).
+- **Languages:** UI strings in EN/PT/RU; default comes from
+  `navigator.language` with a manual EN|PT|RU switch persisted in
+  `localStorage`.
+
 ## Endpoints
 
 | Method | Path | Body | Success | Errors |
