@@ -526,7 +526,9 @@ ApiError api_dispatch(int fd, const HttpRequest *req, Store *store, Server *serv
     if (strncmp(req->path, "/api/notes", 10) == 0) {
         return dispatch_notes(fd, req, store);
     }
-    LOG_INFO(MODULE, "unknown route");
+    char detail[HTTP_MAX_PATH_LEN + HTTP_MAX_METHOD_LEN + 32];
+    snprintf(detail, sizeof(detail), "method=%s path=%s", req->method_text, req->path);
+    LOG_INFO_D(MODULE, "unknown route", detail);
     http_respond_error(fd, API_ERR_NOT_FOUND, "unknown route");
     return API_ERR_NOT_FOUND;
 }
