@@ -3,120 +3,27 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>C API Server — Laboratório</title>
-<style>
-  :root { --bg:#0d1117; --panel:#161b22; --line:#30363d; --txt:#e6edf3; --dim:#8b949e;
-          --green:#3fb950; --red:#f85149; --blue:#58a6ff; --amber:#d29922; --purple:#a371f7; }
-  * { box-sizing:border-box; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; }
-  body { background:var(--bg); color:var(--txt); margin:0; padding:24px; line-height:1.6; }
-  .wrap { max-width:900px; margin:0 auto; }
-  header.hero { padding:20px 22px; background:linear-gradient(135deg,#161b22 0%,#0f2440 100%);
-    border:1px solid var(--line); border-radius:12px; margin-bottom:20px; }
-  .heroRow { display:flex; align-items:center; gap:12px; }
-  header .spacer { flex:1; }
-  .dot { width:14px; height:14px; border-radius:50%; background:var(--dim); flex:none; }
-  .dot.ok { background:var(--green); box-shadow:0 0 10px var(--green); }
-  .dot.bad { background:var(--red); box-shadow:0 0 10px var(--red); }
-  h1 { font-size:24px; margin:0; }
-  .sub { color:var(--dim); font-size:14px; margin-top:4px; }
-  .lang button { background:transparent; border:1px solid var(--line); color:var(--dim); border-radius:6px;
-                 padding:8px 12px; min-height:36px; cursor:pointer; font-size:12px; margin-left:4px; }
-  .lang button.active { color:#fff; border-color:var(--blue); }
-  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:12px; margin-bottom:20px; }
-  .card { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px; }
-  .card .k { color:var(--dim); font-size:11px; text-transform:uppercase; letter-spacing:.04em; }
-  .card .v { font-size:24px; margin-top:4px; }
-  section.panel { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:20px; margin-bottom:16px; }
-  section.panel h2 { font-size:19px; margin:0 0 4px; }
-  .hint { color:var(--dim); font-size:14px; margin:0 0 14px; }
-  label.f { display:block; font-size:11px; color:var(--dim); text-transform:uppercase; letter-spacing:.04em; margin:0 0 4px; }
-  .row { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px; align-items:flex-end; }
-  .field { flex:1; min-width:150px; }
-  input, textarea, select { background:var(--bg); color:var(--txt); border:1px solid var(--line); border-radius:8px;
-                    padding:11px 12px; font-size:15px; width:100%; }
-  textarea { min-height:64px; resize:vertical; }
-  button.big { border:0; border-radius:8px; padding:13px 22px; min-height:48px; cursor:pointer;
-               font-size:16px; font-weight:bold; }
-  button.go { background:#1f6feb; color:#fff; } button.go:hover { background:#388bfd; }
-  button.ok { background:#238636; color:#fff; } button.ok:hover { background:#2ea043; }
-  button.bad { background:#5a1f1f; color:#fff; } button.bad:hover { background:var(--red); }
-  button.warn { background:#5a4413; color:#fff; } button.warn:hover { background:var(--amber); color:#000; }
-  button.ghost { background:transparent; color:var(--txt); border:1px solid var(--line); border-radius:8px;
-                 padding:9px 16px; min-height:40px; cursor:pointer; font-size:14px; }
-  button.ghost:hover { border-color:var(--blue); }
-  button:disabled { opacity:.5; cursor:wait; }
-  :focus-visible { outline:2px solid var(--blue); outline-offset:2px; }
-  .result { border-radius:8px; padding:12px 14px; font-size:15px; margin:10px 0 0; border:1px solid var(--line);
-            background:var(--bg); }
-  .result.good { border-color:var(--green); } .result.fail { border-color:var(--red); }
-  .result code { font-size:13px; color:var(--dim); }
-  .techline { font-size:12px; color:var(--dim); margin:8px 0 0; }
-  details.how { margin-top:12px; border-top:1px dashed var(--line); padding-top:10px; }
-  details.how summary { cursor:pointer; color:var(--blue); font-size:14px; }
-  details.how .steps { font-size:14px; margin:8px 0 0; padding-left:20px; }
-  details.how code { font-size:13px; background:var(--bg); padding:1px 6px; border-radius:4px; }
-  .errgrid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px; }
-  .errcard { border:1px solid var(--line); border-radius:8px; padding:12px; background:var(--bg); }
-  .errcard b { display:block; font-size:14px; margin-bottom:4px; }
-  .errcard p { font-size:13px; color:var(--dim); margin:0 0 10px; }
-  .notecard { border:1px solid var(--line); border-radius:8px; padding:10px 12px; margin:8px 0; background:var(--bg); }
-  .notecard b { font-size:15px; } .notecard p { margin:4px 0 8px; font-size:14px; }
-  .notecard .ops button { min-height:34px; padding:6px 12px; font-size:13px; margin-right:6px; }
-  .badge { display:inline-block; font-size:12px; padding:3px 12px; border-radius:20px; border:1px solid var(--line); }
-  .badge.open { color:var(--green); border-color:var(--green); }
-  .badge.protected { color:var(--amber); border-color:var(--amber); }
-  .notice { font-size:14px; border:1px dashed var(--amber); border-radius:8px; padding:10px 12px; margin:0 0 12px; }
-  pre.out { background:var(--bg); border:1px solid var(--line); border-radius:6px; padding:10px; font-size:12px;
-            max-height:260px; overflow:auto; white-space:pre-wrap; word-break:break-word; margin:8px 0 0; }
-  .explain { border:1px solid var(--amber); border-radius:6px; padding:10px; font-size:13px; margin:8px 0 0;
-             background:#221a08; }
-  .explain b { color:var(--amber); }
-  table.sess { width:100%; border-collapse:collapse; font-size:12px; margin-top:8px; }
-  table.sess th, table.sess td { text-align:left; padding:4px 8px; border-bottom:1px solid var(--line); }
-  table.sess th { color:var(--dim); font-weight:normal; text-transform:uppercase; font-size:11px; }
-  details.cmp { margin-top:12px; border:1px dashed var(--line); border-radius:8px; padding:10px 12px; }
-  details.cmp summary { cursor:pointer; color:var(--purple); font-size:14px; }
-  .cmptabs { display:flex; gap:6px; flex-wrap:wrap; margin:10px 0; }
-  .cmptabs button { background:transparent; border:1px solid var(--line); color:var(--dim); border-radius:6px;
-                    padding:7px 12px; cursor:pointer; font-size:13px; min-height:34px; }
-  .cmptabs button.active { color:#fff; border-color:var(--purple); }
-  #langBtns2 button.active { border-color:var(--purple); color:#fff; }
-  .cmpgrid { display:grid; gap:10px; }
-  @media (min-width: 820px) { .cmpgrid.side { grid-template-columns:1fr 1fr; } }
-  .cmppane { background:var(--bg); border:1px solid var(--line); border-radius:6px; padding:10px; }
-  .cmppane h4 { margin:0 0 4px; font-size:13px; }
-  .cmppane .meta { font-size:11px; color:var(--dim); margin-bottom:6px; }
-  .cmppane .tag { font-size:11px; padding:2px 8px; border-radius:12px; border:1px solid var(--line); }
-  .cmppane .tag.real { color:var(--green); border-color:var(--green); }
-  .cmppane .tag.demo { color:var(--amber); border-color:var(--amber); }
-  .cmppane pre { margin:6px 0; font-size:12px; white-space:pre-wrap; word-break:break-word; }
-  .cmppane .copyrow { text-align:right; }
-  .langnote { font-size:14px; border-left:3px solid var(--purple); padding:8px 12px; margin:10px 0;
-              background:var(--bg); border-radius:0 6px 6px 0; }
-  .toast { position:fixed; right:16px; bottom:16px; display:flex; flex-direction:column; gap:8px; z-index:10; }
-  .toast div { background:#2b1414; border:1px solid var(--red); border-radius:6px; padding:10px 14px; font-size:13px;
-               max-width:360px; }
-  .toast div.ok { background:#0f2b16; border-color:var(--green); }
-  .links a { color:var(--blue); margin-right:14px; font-size:13px; }
-  footer { color:var(--dim); font-size:12px; margin-top:8px; }
-  @media (prefers-reduced-motion: reduce) {
-    .dot.ok, .dot.bad { box-shadow:none; }
-  }
-</style>
+<meta name="color-scheme" content="dark">
+<meta name="description" content="Interactive lab for the C API Server: save, fetch, delete, notes, auth, errors and performance — all against the real backend.">
+<title>C API Server — Lab</title>
+<link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <div class="wrap">
+
   <header class="hero">
     <div style="flex:1">
       <div class="heroRow">
         <span id="dot" class="dot" role="status" aria-label="server status"></span>
-        <h1>🧪 C API Server — <span data-i18n="labWord">Laboratório</span></h1>
+        <h1>C API Server — <span data-i18n="labWord">Lab</span></h1>
       </div>
-      <div class="sub" data-i18n="heroSub">Experimente as funções do servidor. Você não precisa saber API.</div>
-      <div class="sub" id="healthLine" aria-live="polite">…</div>
+      <p class="sub" data-i18n="heroSub">Try the server's features. You don't need to know APIs.</p>
+      <p class="sub" id="healthLine" aria-live="polite">…</p>
     </div>
     <div class="lang" id="langBtns" role="group" aria-label="language">
-      <button data-lang="en" aria-label="English">EN</button><button data-lang="pt" aria-label="Português">PT</button><button data-lang="ru" aria-label="Русский">RU</button>
+      <button data-lang="en" aria-label="English">EN</button>
+      <button data-lang="pt" aria-label="Português">PT</button>
+      <button data-lang="ru" aria-label="Русский">RU</button>
     </div>
   </header>
 
@@ -128,137 +35,175 @@
     <div class="card"><div class="k" data-i18n="mConn">connections</div><div class="v" id="mConn">–</div></div>
   </div>
 
+  <!-- 💾 save / fetch / delete -->
   <section class="panel" aria-labelledby="kvH">
-    <h2 id="kvH">💾 <span data-i18n="saveTitle">Guardar um dado</span></h2>
-    <p class="hint" data-i18n="saveHint">O servidor consegue guardar informações. Dê um nome e um valor, e guarde.</p>
+    <h2 id="kvH">💾 <span data-i18n="saveTitle">Save a value</span></h2>
+    <p class="hint" data-i18n="saveHint">The server can store information. Give it a name and a value, then save.</p>
     <div class="row">
-      <div class="field"><label class="f" for="kvKey" data-i18n="nameL">Nome</label>
-        <input id="kvKey" value="meu_nome" data-tip="key"></div>
-      <div class="field"><label class="f" for="kvVal" data-i18n="valL">Valor</label>
-        <input id="kvVal" value="Nuwket" data-tip="value"></div>
+      <div class="field">
+        <label class="f" for="kvKey" data-i18n="nameL">name</label>
+        <input id="kvKey" value="meu_nome" data-tip="key" autocomplete="off">
+      </div>
+      <div class="field">
+        <label class="f" for="kvVal" data-i18n="valL">value</label>
+        <input id="kvVal" value="Nuwket" data-tip="value" autocomplete="off">
+      </div>
     </div>
     <div class="row">
-      <button class="big ok" onclick="go(this,'kvSave')" data-i18n="saveBtn">🟢 GUARDAR</button>
-      <button class="big go" onclick="go(this,'kvFetch')" data-i18n="fetchBtn">📦 BUSCAR ESSE DADO</button>
-      <button class="big bad" onclick="go(this,'kvDel')" data-i18n="delBtn">🗑️ APAGAR ESSE DADO</button>
+      <button class="big ok" data-action="kvSave" data-i18n="saveBtn">🟢 SAVE</button>
+      <button class="big go" data-action="kvFetch" data-i18n="fetchBtn">📦 FETCH IT</button>
+      <button class="big bad" data-action="kvDelete" data-i18n="delBtn">🗑️ DELETE IT</button>
     </div>
     <div class="result" id="kvResult" aria-live="polite">…</div>
     <div class="techline" id="kvTech"></div>
-    <details class="how"><summary data-i18n="howQ">? Como isso funciona?</summary><div class="steps" data-how="save"></div></details>
-    <details class="cmp"><summary data-i18n="cmpQ">🔎 Como outras linguagens fariam isso?</summary><div data-fn="save"></div></details>
-    <details class="cmp"><summary data-i18n="cmpQget">🔎 …e para BUSCAR?</summary><div data-fn="get"></div></details>
-    <details class="cmp"><summary data-i18n="cmpQdel">🔎 …e para APAGAR?</summary><div data-fn="del"></div></details>
+    <details class="how">
+      <summary data-i18n="howQ">? How does it work?</summary>
+      <div class="steps" data-how="save"></div>
+    </details>
+    <details class="cmp"><summary data-i18n="cmpQ">🔎 How would other languages do this?</summary><div data-fn="save"></div></details>
+    <details class="cmp"><summary data-i18n="cmpQget">🔎 …and to FETCH?</summary><div data-fn="get"></div></details>
+    <details class="cmp"><summary data-i18n="cmpQdel">🔎 …and to DELETE?</summary><div data-fn="del"></div></details>
   </section>
 
+  <!-- 📝 notes -->
   <section class="panel" aria-labelledby="nH">
-    <h2 id="nH">📝 <span data-i18n="notesTitle">Notas</span></h2>
-    <p class="hint" data-i18n="notesHint">O servidor também guarda pequenas notas numeradas.</p>
+    <h2 id="nH">📝 <span data-i18n="notesTitle">Notes</span></h2>
+    <p class="hint" data-i18n="notesHint">The server also keeps small numbered notes.</p>
     <div class="row">
-      <div class="field"><label class="f" for="nTitle" data-i18n="titleL">título</label>
-        <input id="nTitle" value="Minha primeira nota" data-tip="title"></div>
+      <div class="field">
+        <label class="f" for="nTitle" data-i18n="titleL">title</label>
+        <input id="nTitle" value="Minha primeira nota" data-tip="title" autocomplete="off">
+      </div>
     </div>
     <div class="row">
-      <div class="field"><label class="f" for="nBody" data-i18n="bodyL">texto</label>
-        <textarea id="nBody" data-tip="body">Minha primeira nota no C Server</textarea></div>
+      <div class="field">
+        <label class="f" for="nBody" data-i18n="bodyL">text</label>
+        <textarea id="nBody" data-tip="body">Minha primeira nota no C Server</textarea>
+      </div>
     </div>
     <div class="row">
-      <button class="big ok" onclick="go(this,'noteCreate')" data-i18n="createNote">🟢 CRIAR NOTA</button>
-      <button class="big go" onclick="go(this,'noteList')" data-i18n="listNotes">📋 VER TODAS AS NOTAS</button>
+      <button class="big ok" data-note-action="noteCreate" data-i18n="createNote">🟢 CREATE NOTE</button>
+      <button class="big go" data-note-action="noteList" data-i18n="listNotes">📋 SEE ALL NOTES</button>
     </div>
     <div class="result" id="nResult" aria-live="polite">…</div>
     <div id="notesLive"></div>
     <div class="techline" id="nTech"></div>
-    <details class="how"><summary data-i18n="howQ">? Como isso funciona?</summary><div class="steps" data-how="notes"></div></details>
-    <details class="cmp"><summary data-i18n="cmpQ">🔎 Como outras linguagens fariam isso?</summary><div data-fn="note"></div></details>
+    <details class="how">
+      <summary data-i18n="howQ">? How does it work?</summary>
+      <div class="steps" data-how="notes"></div>
+    </details>
+    <details class="cmp"><summary data-i18n="cmpQ">🔎 How would other languages do this?</summary><div data-fn="note"></div></details>
   </section>
 
+  <!-- 🔐 vault -->
   <section class="panel" aria-labelledby="authH">
-    <h2 id="authH">🔐 <span data-i18n="authTitle">Cofre</span></h2>
-    <p class="hint" data-i18n="authHint">O servidor pode exigir uma senha para permitir alterações. Vamos testar.</p>
+    <h2 id="authH">🔐 <span data-i18n="authTitle">Vault</span></h2>
+    <p class="hint" data-i18n="authHint">The server may require a password to allow changes. Let's test.</p>
     <div class="row">
-      <div class="field"><label class="f" for="apiPass" data-i18n="passL">senha de demonstração</label>
-        <input id="apiPass" type="password" value="demo" data-tip="tok"></div>
+      <div class="field">
+        <label class="f" for="apiPass" data-i18n="passL">demo password</label>
+        <input id="apiPass" type="password" value="demo" data-tip="tok" autocomplete="off">
+      </div>
       <span class="badge open" id="authMode">…</span>
+      <button class="ghost" data-action="forgetPassword" data-i18n="forget">Forget</button>
     </div>
-    <div class="notice" id="authNotice" hidden></div>
+    <p class="notice" id="authNotice" hidden></p>
     <div class="row">
-      <button class="big ok" onclick="go(this,'authGood')" data-i18n="authGood">🟢 ENTRAR COM SENHA CORRETA</button>
-      <button class="big bad" onclick="go(this,'authBad')" data-i18n="authBad">🔴 TENTAR COM SENHA ERRADA</button>
-      <button class="big ghost" onclick="go(this,'authNone')" data-i18n="authNone">⚪ TENTAR SEM SENHA</button>
+      <button class="big ok" data-action="authGood" data-i18n="authGood">🟢 ENTER WITH THE RIGHT PASSWORD</button>
+      <button class="big bad" data-action="authWrong" data-i18n="authBad">🔴 TRY THE WRONG PASSWORD</button>
+      <button class="big ghost" data-action="authNone" data-i18n="authNone">⚪ TRY WITH NO PASSWORD</button>
     </div>
     <div class="result" id="authResult" aria-live="polite">…</div>
     <div class="techline" id="authTech"></div>
-    <details class="how"><summary data-i18n="howQ">? Como isso funciona?</summary><div class="steps" data-how="auth"></div></details>
-    <details class="cmp"><summary data-i18n="cmpQ">🔎 Como outras linguagens fariam isso?</summary><div data-fn="auth"></div></details>
+    <details class="how">
+      <summary data-i18n="howQ">? How does it work?</summary>
+      <div class="steps" data-how="auth"></div>
+    </details>
+    <details class="cmp"><summary data-i18n="cmpQ">🔎 How would other languages do this?</summary><div data-fn="auth"></div></details>
   </section>
 
+  <!-- 📡 echo -->
   <section class="panel" aria-labelledby="eH">
-    <h2 id="eH">📡 <span data-i18n="echoTitle">Mandar uma mensagem</span></h2>
-    <p class="hint" data-i18n="echoHint">O servidor devolve exatamente o que recebeu. Escreva algo e envie.</p>
+    <h2 id="eH">📡 <span data-i18n="echoTitle">Send a message</span></h2>
+    <p class="hint" data-i18n="echoHint">The server sends back exactly what it receives. Write something and send it.</p>
     <div class="row">
-      <div class="field"><label class="f" for="echoIn" data-i18n="msgL">mensagem</label>
-        <input id="echoIn" value="Olá servidor!"></div>
-      <button class="big ok" onclick="go(this,'doEcho')" data-i18n="sendBtn">🟢 ENVIAR</button>
+      <div class="field">
+        <label class="f" for="echoIn" data-i18n="msgL">message</label>
+        <input id="echoIn" value="Olá servidor!" autocomplete="off">
+      </div>
+      <button class="big ok" data-action="echoSend" data-i18n="sendBtn">🟢 SEND</button>
     </div>
     <div class="result" id="echoResult" aria-live="polite">…</div>
     <div class="techline" id="echoTech"></div>
-    <details class="how"><summary data-i18n="howQ">? Como isso funciona?</summary><div class="steps" data-how="echo"></div></details>
-    <details class="cmp"><summary data-i18n="cmpQ">🔎 Como outras linguagens fariam isso?</summary><div data-fn="echo"></div></details>
+    <details class="how">
+      <summary data-i18n="howQ">? How does it work?</summary>
+      <div class="steps" data-how="echo"></div>
+    </details>
+    <details class="cmp"><summary data-i18n="cmpQ">🔎 How would other languages do this?</summary><div data-fn="echo"></div></details>
   </section>
 
+  <!-- 💥 error gallery -->
   <section class="panel" aria-labelledby="errH">
-    <h2 id="errH">💥 <span data-i18n="errTitle">Faça o servidor reclamar</span></h2>
-    <p class="hint" data-i18n="errHint">Nem toda requisição precisa funcionar. Clique para ver como o servidor lida com problemas.</p>
+    <h2 id="errH">💥 <span data-i18n="errTitle">Make the server complain</span></h2>
+    <p class="hint" data-i18n="errHint">Not every request has to work. Click to see how the server handles problems.</p>
     <div class="errgrid">
-      <div class="errcard"><b data-i18n="eGoneT">🟡 Buscar algo que não existe</b>
-        <p data-i18n="eGoneD">Peça um dado que nunca foi guardado.</p>
-        <button class="ghost" onclick="go(this,'errGone')" data-i18n="tryBtn">TESTAR</button></div>
-      <div class="errcard"><b data-i18n="eAuthT">🟡 Mandar uma senha errada</b>
-        <p data-i18n="eAuthD">Veja o que acontece quando a autenticação falha.</p>
-        <button class="ghost" onclick="go(this,'errAuth')" data-i18n="tryBtn2">TESTAR</button></div>
-      <div class="errcard"><b data-i18n="eDataT">🟡 Enviar dados inválidos</b>
-        <p data-i18n="eDataD">Envie algo que o servidor não consegue aceitar.</p>
-        <button class="ghost" onclick="go(this,'errData')" data-i18n="tryBtn3">TESTAR</button></div>
-      <div class="errcard"><b data-i18n="eOpT">🟡 Usar a operação errada</b>
-        <p data-i18n="eOpD">Tente fazer algo que essa função não permite.</p>
-        <button class="ghost" onclick="go(this,'errOp')" data-i18n="tryBtn4">TESTAR</button></div>
-      <div class="errcard"><b data-i18n="eBigT">🟡 Mandar dado gigante</b>
-        <p data-i18n="eBigD">Ultrapasse o limite de 64KB de propósito.</p>
-        <button class="ghost" onclick="go(this,'errBig')" data-i18n="tryBtn5">TESTAR</button></div>
-      <div class="errcard"><b data-i18n="eRouteT">🟡 Pedir rota inexistente</b>
-        <p data-i18n="eRouteD">Chame um endereço que o servidor não conhece.</p>
-        <button class="ghost" onclick="go(this,'errRoute')" data-i18n="tryBtn6">TESTAR</button></div>
+      <div class="errcard">
+        <b data-i18n="eGoneT">🟡 Fetch something missing</b>
+        <p data-i18n="eGoneD">Ask for a value that was never saved.</p>
+        <button class="ghost" data-err="errMissingValue" data-i18n="tryBtn">TEST</button>
+      </div>
+      <div class="errcard">
+        <b data-i18n="eAuthT">🟡 Send a wrong password</b>
+        <p data-i18n="eAuthD">See what happens when authentication fails.</p>
+        <button class="ghost" data-err="errWrongKey" data-i18n="tryBtn">TEST</button>
+      </div>
+      <div class="errcard">
+        <b data-i18n="eDataT">🟡 Send invalid data</b>
+        <p data-i18n="eDataD">Send something the server cannot accept.</p>
+        <button class="ghost" data-err="errMissing" data-i18n="tryBtn">TEST</button>
+      </div>
+      <div class="errcard">
+        <b data-i18n="eOpT">🟡 Use the wrong operation</b>
+        <p data-i18n="eOpD">Try something this function does not allow.</p>
+        <button class="ghost" data-err="errWrongMethod" data-i18n="tryBtn">TEST</button>
+      </div>
+      <div class="errcard">
+        <b data-i18n="eBigT">🟡 Send a giant value</b>
+        <p data-i18n="eBigD">Break the 64KB limit on purpose.</p>
+        <button class="ghost" data-err="errTooBig" data-i18n="tryBtn">TEST</button>
+      </div>
+      <div class="errcard">
+        <b data-i18n="eRouteT">🟡 Ask an unknown address</b>
+        <p data-i18n="eRouteD">Call a route the server never heard of.</p>
+        <button class="ghost" data-err="errUnknownRoute" data-i18n="tryBtn">TEST</button>
+      </div>
     </div>
     <div class="result" id="errResult" aria-live="polite">…</div>
     <div class="techline" id="errTech"></div>
   </section>
 
+  <!-- ⚡ performance -->
   <section class="panel" aria-labelledby="perfH">
-    <h2 id="perfH">⚡ <span data-i18n="perfTitle">Quantas vezes o servidor responde?</span></h2>
-    <p class="hint" data-i18n="perfHint">O teste envia requisições reais e mede o tempo. Nada é simulado.</p>
+    <h2 id="perfH">⚡ <span data-i18n="perfTitle">How fast does the server answer?</span></h2>
+    <p class="hint" data-i18n="perfHint">The test sends real requests and times them. Nothing is faked.</p>
     <div class="row">
-      <button class="ghost" data-perf="1" onclick="perfSet(1)">1</button>
-      <button class="ghost" data-perf="10" onclick="perfSet(10)">10</button>
-      <button class="ghost" data-perf="100" onclick="perfSet(100)">100</button>
-      <button class="big ok" onclick="go(this,'perfRun')" data-i18n="runTest">🟢 RODAR TESTE</button>
+      <button class="ghost pill" data-perf="1" aria-pressed="false">1</button>
+      <button class="ghost pill" data-perf="10" aria-pressed="true">10</button>
+      <button class="ghost pill" data-perf="100" aria-pressed="false">100</button>
+      <button class="big ok" data-action="runPerf" data-i18n="runTest">🟢 RUN TEST</button>
     </div>
     <div class="result" id="perfResult" aria-live="polite">…</div>
     <div class="techline" id="perfTech"></div>
-    <details class="how"><summary data-i18n="howQ">? Como isso funciona?</summary><div class="steps" data-how="perf"></div></details>
+    <details class="how">
+      <summary data-i18n="howQ">? How does it work?</summary>
+      <div class="steps" data-how="perf"></div>
+    </details>
   </section>
 
-  <section class="panel links">
-    <h2 data-i18n="linksTitle">Atalhos</h2>
-    <a href="/health" target="_blank" rel="noopener">/health</a>
-    <a href="/metrics" target="_blank" rel="noopener">/metrics</a>
-    <a href="/api/kv?limit=50" target="_blank" rel="noopener">/api/kv</a>
-    <a href="/api/notes?limit=50" target="_blank" rel="noopener">/api/notes</a>
-  </section>
-
+  <!-- 🌎 languages -->
   <section class="panel" aria-labelledby="langH">
-    <h2 id="langH">🌎 <span data-i18n="langTitle">A mesma tarefa, cinco linguagens</span></h2>
-    <p class="hint" data-i18n="langHint">Todos resolvem o mesmo problema. O que muda é como cada linguagem
-      expressa isso — e o que ela exige de você. Sem veredito: leia e compare.</p>
+    <h2 id="langH">🌎 <span data-i18n="langTitle">The same task, five languages</span></h2>
+    <p class="hint" data-i18n="langHint">Everyone solves the same problem. What changes is how each language expresses it.</p>
     <div class="row" id="langBtns2" role="group" aria-label="implementation language">
       <button class="ghost" data-impl="c">C</button>
       <button class="ghost" data-impl="python">Python</button>
@@ -266,1024 +211,72 @@
       <button class="ghost" data-impl="rust">Rust</button>
       <button class="ghost" data-impl="node">Node.js</button>
     </div>
-    <div class="langnote" id="langNote" aria-live="polite">…</div>
-    <table class="sess"><thead><tr>
-      <th data-i18n="colPiece">peça</th><th>C</th><th>Python</th><th>Go</th><th>Rust</th><th>Node.js</th>
-    </tr></thead><tbody id="pieceBody"></tbody></table>
+    <p class="langnote" id="langNote" aria-live="polite">…</p>
+    <div class="table-scroll">
+      <table class="sess matrix">
+        <thead>
+          <tr><th data-i18n="colPiece">piece</th><th>C</th><th>Python</th><th>Go</th><th>Rust</th><th>Node.js</th></tr>
+        </thead>
+        <tbody id="pieceBody"></tbody>
+      </table>
+    </div>
   </section>
 
-  <details class="panel" style="border-style:dashed">
-    <summary style="cursor:pointer;font-size:16px">🛠️ <span data-i18n="techTitle">Modo técnico — ver o que aconteceu por baixo</span></summary>
-    <p class="hint" data-i18n="techHint">Método, URL, headers, corpo, status, resposta, tempo e cURL de cada chamada.</p>
+  <nav class="panel links" aria-label="shortcuts">
+    <h2 data-i18n="linksTitle">Shortcuts</h2>
+    <a href="/health" target="_blank" rel="noopener">/health</a>
+    <a href="/metrics" target="_blank" rel="noopener">/metrics</a>
+    <a href="/api/kv?limit=50" target="_blank" rel="noopener">/api/kv</a>
+    <a href="/api/notes?limit=50" target="_blank" rel="noopener">/api/notes</a>
+  </nav>
+
+  <!-- 🛠 tech mode -->
+  <details class="panel tech">
+    <summary>🛠️ <span data-i18n="techTitle">Tech mode — see what happened underneath</span></summary>
+    <p class="hint" data-i18n="techHint">Method, URL, headers, body, status, response, time and curl for every call.</p>
     <div class="row">
-      <div class="field" style="max-width:150px;flex:none"><label class="f" for="cMethod">method</label>
-        <select id="cMethod"><option>GET</option><option>POST</option><option>PUT</option><option>DELETE</option></select></div>
-      <div class="field"><label class="f" for="cPath" data-i18n="pathL">path</label>
-        <input id="cPath" value="/health" data-tip="path"></div>
-      <button class="act" onclick="go(this,'composerGo')" data-i18n="execute">Execute</button>
-      <button class="ghost" onclick="copyCurl()">curl ⧉</button>
-      <button class="ghost" onclick="clearHist()" data-i18n="clear">Clear</button>
+      <div class="field" style="max-width:150px;flex:none">
+        <label class="f" for="cMethod">method</label>
+        <select id="cMethod">
+          <option>GET</option><option>POST</option><option>PUT</option><option>DELETE</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="f" for="cPath" data-i18n="pathL">path</label>
+        <input id="cPath" value="/health" data-tip="path" autocomplete="off">
+      </div>
+      <button class="go big" data-action="composerRun" data-i18n="execute">Execute</button>
+      <button class="ghost" data-action="copyCurl">curl ⧉</button>
+      <button class="ghost" data-action="clearHistory" data-i18n="clear">Clear</button>
     </div>
     <div class="row">
-      <div class="field"><label class="f" for="cHeaders" data-i18n="headersL">headers (one per line)</label>
-        <textarea id="cHeaders" rows="2" data-tip="hdrs">Content-Type: application/json</textarea></div>
-      <div class="field"><label class="f" for="cBody" data-i18n="bodyL">body (raw)</label>
-        <textarea id="cBody" rows="2" data-tip="rawbody"></textarea></div>
+      <div class="field">
+        <label class="f" for="cHeaders" data-i18n="headersL">headers (one per line)</label>
+        <textarea id="cHeaders" rows="2" data-tip="hdrs">Content-Type: application/json</textarea>
+      </div>
+      <div class="field">
+        <label class="f" for="cBody" data-i18n="bodyL2">body (raw)</label>
+        <textarea id="cBody" rows="2" data-tip="rawbody"></textarea>
+      </div>
     </div>
     <div class="explain" aria-live="polite"><b>auto-explain (EN):</b> <span id="devExplainTxt">make a request…</span></div>
     <pre class="out" id="devLast" aria-live="polite">—</pre>
-    <pre class="out" id="devHist" style="max-height:160px" aria-label="request history">—</pre>
-    <table class="sess"><thead><tr>
-      <th data-i18n="colRoute">endpoint</th><th>2xx</th><th>4xx</th><th>5xx</th><th data-i18n="colTotal">total</th>
-    </tr></thead><tbody id="sessBody"><tr><td colspan="5">—</td></tr></tbody></table>
+    <pre class="out" id="devHist" aria-label="request history">—</pre>
+    <div class="table-scroll">
+      <table class="sess">
+        <thead>
+          <tr>
+            <th data-i18n="colRoute">endpoint</th><th>2xx</th><th>4xx</th><th>5xx</th><th data-i18n="colTotal">total</th>
+          </tr>
+        </thead>
+        <tbody id="sessBody"><tr><td colspan="5">—</td></tr></tbody>
+      </table>
+    </div>
   </details>
 
-  <footer data-i18n="footer">C API Server — tudo aqui bate no backend C de verdade. Sem mocks.</footer>
+  <footer data-i18n="footer">C API Server — everything here hits the real C backend. No mocks.</footer>
 </div>
 <div class="toast" id="toast" aria-live="assertive"></div>
-<script>
-"use strict";
-/* ---------- i18n: EN/PT/RU, default from the browser ---------- */
-const I18N = {
-  en: { labWord:"Lab", heroSub:"Try the server's features. You don't need to know APIs.",
-    probing:"probing /health…", mReq:"requests", mErr:"errors", mKv:"kv keys", mNotes:"notes", mConn:"connections",
-    saveTitle:"Save a value", saveHint:"The server can store information. Give it a name and a value, then save.",
-    nameL:"name", valL:"value", saveBtn:"🟢 SAVE", fetchBtn:"📦 FETCH IT", delBtn:"🗑️ DELETE IT",
-    notesTitle:"Notes", notesHint:"The server also keeps small numbered notes.",
-    titleL:"title", bodyL:"text", createNote:"🟢 CREATE NOTE", listNotes:"📋 SEE ALL NOTES",
-    authTitle:"Vault", authHint:"The server may require a password to allow changes. Let's test.",
-    passL:"demo password", authGood:"🟢 ENTER WITH THE RIGHT PASSWORD", authBad:"🔴 TRY THE WRONG PASSWORD",
-    authNone:"⚪ TRY WITH NO PASSWORD",
-    openNote:"Server is OPEN (no --api-key): password demos will return 200. Restart with an API key to see real 401/403.",
-    echoTitle:"Send a message", echoHint:"The server sends back exactly what it receives. Write something and send it.",
-    msgL:"message", sendBtn:"🟢 SEND",
-    errTitle:"Make the server complain", errHint:"Not every request has to work. Click to see how the server handles problems.",
-    eGoneT:"🟡 Fetch something missing", eGoneD:"Ask for a value that was never saved.",
-    eAuthT:"🟡 Send a wrong password", eAuthD:"See what happens when authentication fails.",
-    eDataT:"🟡 Send invalid data", eDataD:"Send something the server cannot accept.",
-    eOpT:"🟡 Use the wrong operation", eOpD:"Try something this function does not allow.",
-    eBigT:"🟡 Send a giant value", eBigD:"Break the 64KB limit on purpose.",
-    eRouteT:"🟡 Ask an unknown address", eRouteD:"Call a route the server never heard of.",
-    tryBtn:"TEST", perfTitle:"How fast does the server answer?", perfHint:"The test sends real requests and times them. Nothing is faked.",
-    runTest:"🟢 RUN TEST", linksTitle:"Shortcuts",
-    cmpQ:"🔎 How would other languages do this?", cmpQget:"🔎 …and to FETCH?", cmpQdel:"🔎 …and to DELETE?",
-    langTitle:"The same task, five languages",
-    langHint:"Everyone solves the same problem. What changes is how each language expresses it — and what it asks of you. No verdict: read and compare.",
-    colPiece:"piece", realTag:"real code from this server", demoTag:"equivalent example — NOT executed here", copied:"copied",
-    techTitle:"Tech mode — see what happened underneath", pathL:"path",
-    headersL:"headers (one per line)", bodyL:"body (raw)", execute:"Execute", clear:"Clear",
-    colRoute:"endpoint", colTotal:"total",
-    howQ:"? How does it work?",
-    footer:"C API Server — everything here hits the real C backend. No mocks." },
-  pt: { labWord:"Laboratório", heroSub:"Experimente as funções do servidor. Você não precisa saber API.",
-    probing:"consultando /health…", mReq:"requisições", mErr:"erros", mKv:"chaves kv", mNotes:"notas", mConn:"conexões",
-    saveTitle:"Guardar um dado", saveHint:"O servidor consegue guardar informações. Dê um nome e um valor, e guarde.",
-    nameL:"Nome", valL:"Valor", saveBtn:"🟢 GUARDAR", fetchBtn:"📦 BUSCAR ESSE DADO", delBtn:"🗑️ APAGAR ESSE DADO",
-    notesTitle:"Notas", notesHint:"O servidor também guarda pequenas notas numeradas.",
-    titleL:"título", bodyL:"texto", createNote:"🟢 CRIAR NOTA", listNotes:"📋 VER TODAS AS NOTAS",
-    authTitle:"Cofre", authHint:"O servidor pode exigir uma senha para permitir alterações. Vamos testar.",
-    passL:"senha de demonstração", authGood:"🟢 ENTRAR COM SENHA CORRETA", authBad:"🔴 TENTAR COM SENHA ERRADA",
-    authNone:"⚪ TENTAR SEM SENHA",
-    openNote:"Servidor ABERTO (sem --api-key): demos de senha vão retornar 200. Reinicie com API key para ver 401/403 de verdade.",
-    echoTitle:"Mandar uma mensagem", echoHint:"O servidor devolve exatamente o que recebeu. Escreva algo e envie.",
-    msgL:"mensagem", sendBtn:"🟢 ENVIAR",
-    errTitle:"Faça o servidor reclamar", errHint:"Nem toda requisição precisa funcionar. Clique para ver como o servidor lida com problemas.",
-    eGoneT:"🟡 Buscar algo que não existe", eGoneD:"Peça um dado que nunca foi guardado.",
-    eAuthT:"🟡 Mandar uma senha errada", eAuthD:"Veja o que acontece quando a autenticação falha.",
-    eDataT:"🟡 Enviar dados inválidos", eDataD:"Envie algo que o servidor não consegue aceitar.",
-    eOpT:"🟡 Usar a operação errada", eOpD:"Tente fazer algo que essa função não permite.",
-    eBigT:"🟡 Mandar dado gigante", eBigD:"Ultrapasse o limite de 64KB de propósito.",
-    eRouteT:"🟡 Pedir rota inexistente", eRouteD:"Chame um endereço que o servidor não conhece.",
-    tryBtn:"TESTAR", perfTitle:"Quantas vezes o servidor responde?", perfHint:"O teste envia requisições reais e mede o tempo. Nada é simulado.",
-    runTest:"🟢 RODAR TESTE", linksTitle:"Atalhos",
-    cmpQ:"🔎 Como outras linguagens fariam isso?", cmpQget:"🔎 …e para BUSCAR?", cmpQdel:"🔎 …e para APAGAR?",
-    langTitle:"A mesma tarefa, cinco linguagens",
-    langHint:"Todos resolvem o mesmo problema. O que muda é como cada linguagem expressa isso — e o que ela exige de você. Sem veredito: leia e compare.",
-    colPiece:"peça", realTag:"código real deste servidor", demoTag:"exemplo equivalente — NÃO executado aqui", copied:"copiado",
-    techTitle:"Modo técnico — ver o que aconteceu por baixo", pathL:"rota",
-    headersL:"headers (um por linha)", bodyL:"corpo (bruto)", execute:"Executar", clear:"Limpar",
-    colRoute:"endpoint", colTotal:"total",
-    howQ:"? Como isso funciona?",
-    footer:"C API Server — tudo aqui bate no backend C de verdade. Sem mocks." },
-  ru: { labWord:"Лаборатория", heroSub:"Попробуйте функции сервера. Знать API не нужно.",
-    probing:"опрос /health…", mReq:"запросы", mErr:"ошибки", mKv:"ключи kv", mNotes:"заметки", mConn:"соединения",
-    saveTitle:"Сохранить данное", saveHint:"Сервер умеет хранить информацию. Дайте имя и значение — и сохраните.",
-    nameL:"Имя", valL:"Значение", saveBtn:"🟢 СОХРАНИТЬ", fetchBtn:"📦 НАЙТИ ЕГО", delBtn:"🗑️ УДАЛИТЬ ЕГО",
-    notesTitle:"Заметки", notesHint:"Сервер также хранит маленькие номерные заметки.",
-    titleL:"заголовок", bodyL:"текст", createNote:"🟢 СОЗДАТЬ ЗАМЕТКУ", listNotes:"📋 ВСЕ ЗАМЕТКИ",
-    authTitle:"Сейф", authHint:"Сервер может требовать пароль для изменений. Давайте проверим.",
-    passL:"демо-пароль", authGood:"🟢 ВОЙТИ С ВЕРНЫМ ПАРОЛЕМ", authBad:"🔴 НЕВЕРНЫЙ ПАРОЛЬ",
-    authNone:"⚪ БЕЗ ПАРОЛЯ",
-    openNote:"Сервер ОТКРЫТ (без --api-key): демо вернут 200. Перезапустите с ключом, чтобы увидеть настоящие 401/403.",
-    echoTitle:"Отправить сообщение", echoHint:"Сервер возвращает ровно то, что получил. Напишите что-нибудь.",
-    msgL:"сообщение", sendBtn:"🟢 ОТПРАВИТЬ",
-    errTitle:"Заставьте сервер жаловаться", errHint:"Не каждый запрос обязан работать. Нажмите и смотрите, как сервер решает проблемы.",
-    eGoneT:"🟡 Найти несуществующее", eGoneD:"Попросите данное, которое никто не сохранял.",
-    eAuthT:"🟡 Неверный пароль", eAuthD:"Смотрите, что бывает при ошибке входа.",
-    eDataT:"🟡 Битые данные", eDataD:"Отправьте то, что сервер принять не может.",
-    eOpT:"🟡 Не та операция", eOpD:"Попробуйте то, что функция не разрешает.",
-    eBigT:"🟡 Гигантское значение", eBigD:"Специально превысьте лимит 64KB.",
-    eRouteT:"🟡 Неизвестный адрес", eRouteD:"Вызовите роут, о котором сервер не слышал.",
-    tryBtn:"ПРОБА", perfTitle:"Как быстро отвечает сервер?", perfHint:"Тест шлёт настоящие запросы и меряет время. Ничего не подделано.",
-    runTest:"🟢 ЗАПУСТИТЬ ТЕСТ", linksTitle:"Ссылки",
-    cmpQ:"🔎 А как бы это сделали другие языки?", cmpQget:"🔎 …а НАЙТИ?", cmpQdel:"🔎 …а УДАЛИТЬ?",
-    langTitle:"Одна задача — пять языков",
-    langHint:"Все решают одну задачу. Разница — в том, как каждый язык это выражает и что требует от вас. Без вердикта: читайте и сравнивайте.",
-    colPiece:"часть", realTag:"настоящий код этого сервера", demoTag:"аналог — здесь НЕ выполняется", copied:"скопировано",
-    techTitle:"Техрежим — что было под капотом", pathL:"путь",
-    headersL:"заголовки (по одному в строке)", bodyL:"тело (сырое)", execute:"Выполнить", clear:"Очистить",
-    colRoute:"эндпоинт", colTotal:"всего",
-    howQ:"? Как это работает?",
-    footer:"C API Server — всё здесь бьёт в настоящий C-бэкенд. Без моков." }
-};
-const TIPS = {
-  en: { key:"Letters, digits, dot, underscore, dash. 1–128 chars.", value:"Stored as a JSON string, up to ~60KB.",
-    title:"Required, 1–200 chars.", body:"Optional text, up to 8192 chars.",
-    tok:"Sent as X-API-Key header on writes. Lives only in this browser.", path:"Must start with /.",
-    hdrs:"One 'Name: value' header per line.", rawbody:"Sent byte-for-byte." },
-  pt: { key:"Letras, dígitos, ponto, underscore, traço. 1–128 caracteres.", value:"Guardado como string JSON, até ~60KB.",
-    title:"Obrigatório, 1–200 caracteres.", body:"Texto opcional, até 8192 caracteres.",
-    tok:"Enviado como header X-API-Key nas escritas. Fica só neste navegador.", path:"Deve começar com /.",
-    hdrs:"Um header 'Nome: valor' por linha.", rawbody:"Enviado byte a byte." },
-  ru: { key:"Буквы, цифры, точка, подчёркивание, дефис. 1–128 символов.", value:"Хранится как строка JSON, до ~60KB.",
-    title:"Обязательно, 1–200 символов.", body:"Необязательный текст, до 8192 символов.",
-    tok:"Шлётся заголовком X-API-Key при записи. Только в этом браузере.", path:"Должен начинаться с /.",
-    hdrs:"Один заголовок 'Имя: значение' в строке.", rawbody:"Шлётся как есть." }
-};
-/* Human result messages: MSGS[lang][key](...args). */
-const MSGS = {
-  en: {
-    saved: (k, v) => "✅ The server saved it: " + k + " = " + v,
-    fetched: v => "📦 The server answered: " + v,
-    deleted: () => "🗑️ The server confirmed the value was removed.",
-    noteMade: id => "✅ Note saved with id " + id + ".",
-    notesListed: n => "📋 The server returned " + n + " note(s) below.",
-    noteGone: id => "🗑️ Note " + id + " deleted.",
-    authOk: () => "✅ Password accepted. The server allowed the change.",
-    authOpen: () => "✅ The server allowed it — it runs OPEN (no password configured).",
-    authBad: () => "❌ The server refused: wrong password. (HTTP 403)",
-    authNone: () => "🔒 The server refused: no password was sent. (HTTP 401)",
-    echoGot: (a, b) => "📤 You sent: \"" + a + "\"\n📥 The server answered: \"" + b + "\"",
-    err404: () => "❌ The server said: “not found”. (HTTP 404)",
-    err403: () => "🔒 Access denied: wrong password. (HTTP 403)",
-    err401: () => "🔒 Access denied: no password sent. (HTTP 401)",
-    err400: () => "⚠️ The server rejected the data. (HTTP 400)",
-    err405: () => "🚫 Operation not allowed here. (HTTP 405)",
-    err413: () => "⚠️ Too big: over the 64KB limit. (HTTP 413)",
-    perf: (n, e, t, a) => n + " real requests · " + e + " errors · " + t + "ms total · " + a + "ms average"
-  },
-  pt: {
-    saved: (k, v) => "✅ O servidor guardou: " + k + " = " + v,
-    fetched: v => "📦 O servidor respondeu: " + v,
-    deleted: () => "🗑️ O servidor confirmou que o dado foi removido.",
-    noteMade: id => "✅ Nota guardada com id " + id + ".",
-    notesListed: n => "📋 O servidor devolveu " + n + " nota(s) abaixo.",
-    noteGone: id => "🗑️ Nota " + id + " apagada.",
-    authOk: () => "✅ A senha foi aceita. O servidor permitiu a alteração.",
-    authOpen: () => "✅ O servidor permitiu — ele está ABERTO (sem senha configurada).",
-    authBad: () => "❌ O servidor recusou: senha errada. (HTTP 403)",
-    authNone: () => "🔒 O servidor recusou: nenhuma senha enviada. (HTTP 401)",
-    echoGot: (a, b) => "📤 Você enviou: \"" + a + "\"\n📥 O servidor respondeu: \"" + b + "\"",
-    err404: () => "❌ O servidor disse: “não encontrado”. (HTTP 404)",
-    err403: () => "🔒 Acesso recusado: senha errada. (HTTP 403)",
-    err401: () => "🔒 Acesso recusado: sem senha. (HTTP 401)",
-    err400: () => "⚠️ O servidor rejeitou os dados. (HTTP 400)",
-    err405: () => "🚫 Operação não permitida aqui. (HTTP 405)",
-    err413: () => "⚠️ Grande demais: passou de 64KB. (HTTP 413)",
-    perf: (n, e, t, a) => n + " requisições reais · " + e + " erros · " + t + "ms total · " + a + "ms média"
-  },
-  ru: {
-    saved: (k, v) => "✅ Сервер сохранил: " + k + " = " + v,
-    fetched: v => "📦 Сервер ответил: " + v,
-    deleted: () => "🗑️ Сервер подтвердил удаление.",
-    noteMade: id => "✅ Заметка сохранена с id " + id + ".",
-    notesListed: n => "📋 Сервер вернул заметок: " + n + ".",
-    noteGone: id => "🗑️ Заметка " + id + " удалена.",
-    authOk: () => "✅ Пароль принят. Сервер разрешил изменение.",
-    authOpen: () => "✅ Сервер разрешил — он ОТКРЫТ (пароль не настроен).",
-    authBad: () => "❌ Сервер отказал: неверный пароль. (HTTP 403)",
-    authNone: () => "🔒 Сервер отказал: пароль не отправлен. (HTTP 401)",
-    echoGot: (a, b) => "📤 Вы отправили: \"" + a + "\"\n📥 Сервер ответил: \"" + b + "\"",
-    err404: () => "❌ Сервер сказал: «не найдено». (HTTP 404)",
-    err403: () => "🔒 Доступ запрещён: неверный пароль. (HTTP 403)",
-    err401: () => "🔒 Доступ запрещён: без пароля. (HTTP 401)",
-    err400: () => "⚠️ Сервер отклонил данные. (HTTP 400)",
-    err405: () => "🚫 Здесь так нельзя. (HTTP 405)",
-    err413: () => "⚠️ Слишком много: больше 64KB. (HTTP 413)",
-    perf: (n, e, t, a) => n + " настоящих запросов · ошибок: " + e + " · " + t + "мс всего · " + a + "мс среднее"
-  }
-};
-/* "How does it work?" bodies: HOW[lang][section]. */
-const HOW = {
-  en: {
-    save: "<ol><li>You clicked <b>GUARDAR</b>.</li><li>The browser sent the name and value to the C server.</li><li>The server wrote them into SQLite.</li><li>The browser showed you the answer.</li></ol>Technically: <code>PUT /api/kv/:key → 200</code>",
-    notes: "<ol><li>You clicked <b>CREATE NOTE</b>.</li><li>The browser sent title and text to the server.</li><li>The server stored a numbered row in SQLite.</li></ol>Technically: <code>POST /api/notes → 201</code>",
-    auth: "<ol><li>You tried a password.</li><li>The browser sent it as an <code>X-API-Key</code> header.</li><li>The server compared it in constant time and allowed or refused.</li></ol>Technically: <code>PUT … → 200 / 401 / 403</code>",
-    echo: "<ol><li>You clicked <b>SEND</b>.</li><li>The browser sent your text as JSON.</li><li>The server echoed the same bytes back.</li></ol>Technically: <code>POST /api/echo → 200</code>",
-    perf: "<ol><li>You clicked <b>RUN TEST</b>.</li><li>The browser fired N real requests at once.</li><li>It measured the wall time and counted errors.</li></ol>Timings include your local network."
-  },
-  pt: {
-    save: "<ol><li>Você clicou em <b>GUARDAR</b>.</li><li>O navegador mandou nome e valor ao servidor C.</li><li>O servidor gravou no SQLite.</li><li>O navegador mostrou a resposta.</li></ol>Tecnicamente: <code>PUT /api/kv/:key → 200</code>",
-    notes: "<ol><li>Você clicou em <b>CRIAR NOTA</b>.</li><li>O navegador mandou título e texto ao servidor.</li><li>O servidor guardou uma linha numerada no SQLite.</li></ol>Tecnicamente: <code>POST /api/notes → 201</code>",
-    auth: "<ol><li>Você testou uma senha.</li><li>O navegador a enviou como header <code>X-API-Key</code>.</li><li>O servidor comparou em tempo constante e permitiu ou recusou.</li></ol>Tecnicamente: <code>PUT … → 200 / 401 / 403</code>",
-    echo: "<ol><li>Você clicou em <b>ENVIAR</b>.</li><li>O navegador mandou seu texto como JSON.</li><li>O servidor devolveu os mesmos bytes.</li></ol>Tecnicamente: <code>POST /api/echo → 200</code>",
-    perf: "<ol><li>Você clicou em <b>RODAR TESTE</b>.</li><li>O navegador disparou N requisições reais de uma vez.</li><li>Mediu o tempo e contou os erros.</li></ol>O tempo inclui sua rede local."
-  },
-  ru: {
-    save: "<ol><li>Вы нажали <b>СОХРАНИТЬ</b>.</li><li>Браузер отправил имя и значение C-серверу.</li><li>Сервер записал их в SQLite.</li><li>Браузер показал ответ.</li></ol>Технически: <code>PUT /api/kv/:key → 200</code>",
-    notes: "<ol><li>Вы нажали <b>СОЗДАТЬ ЗАМЕТКУ</b>.</li><li>Браузер отправил заголовок и текст.</li><li>Сервер сохранил строку с номером в SQLite.</li></ol>Технически: <code>POST /api/notes → 201</code>",
-    auth: "<ol><li>Вы проверили пароль.</li><li>Браузер отправил его заголовком <code>X-API-Key</code>.</li><li>Сервер сравнил за константное время и разрешил или отказал.</li></ol>Технически: <code>PUT … → 200 / 401 / 403</code>",
-    echo: "<ol><li>Вы нажали <b>ОТПРАВИТЬ</b>.</li><li>Браузер отправил текст как JSON.</li><li>Сервер вернул те же байты.</li></ol>Технически: <code>POST /api/echo → 200</code>",
-    perf: "<ol><li>Вы нажали <b>ЗАПУСТИТЬ ТЕСТ</b>.</li><li>Браузер разом отправил N настоящих запросов.</li><li>Замерено время, посчитаны ошибки.</li></ol>Время включает вашу локальную сеть."
-  }
-};
-let LANG = "en";
-function detectLang() {
-  try {
-    const saved = localStorage.getItem("capi-lang");
-    if (saved && I18N[saved]) return saved;
-  } catch (e) { /* private mode: fall through to browser sniffing */ }
-  const nav = (navigator.language || "en").toLowerCase();
-  if (nav.indexOf("ru") === 0) return "ru";
-  if (nav.indexOf("pt") === 0) return "pt";
-  return "en";
-}
-function setLang(l) {
-  if (!I18N[l]) l = "en";
-  LANG = l;
-  document.documentElement.lang = l;
-  const d = I18N[l], tips = TIPS[l];
-  document.querySelectorAll("[data-i18n]").forEach(el => {
-    const k = el.getAttribute("data-i18n");
-    if (d[k] !== undefined) el.textContent = d[k];
-  });
-  document.querySelectorAll("[data-i18n-ph]").forEach(el => {
-    const k = el.getAttribute("data-i18n-ph");
-    if (d[k] !== undefined) el.placeholder = d[k];
-  });
-  document.querySelectorAll("[data-tip]").forEach(el => {
-    const k = el.getAttribute("data-tip");
-    if (tips[k] !== undefined) el.title = tips[k];
-  });
-  document.querySelectorAll("[data-how]").forEach(el => {
-    const k = el.getAttribute("data-how");
-    if (HOW[l] && HOW[l][k]) el.innerHTML = HOW[l][k];
-  });
-  document.querySelectorAll("#langBtns button").forEach(b =>
-    b.classList.toggle("active", b.getAttribute("data-lang") === l));
-  document.querySelectorAll("[data-fn]").forEach(div => { if (div._sel) renderCmp(div); });
-  renderLangNote();
-  try { localStorage.setItem("capi-lang", l); } catch (e) { /* ignore */ }
-  if (document.getElementById("dot").className.indexOf("ok") < 0) refresh(true);
-}
-/* ---------- auto-explain (always English) ---------- */
-const EXPLAIN_STATUS = {
-  200: "OK — the server understood the request and answered.",
-  201: "Created — a new row was stored in SQLite.",
-  204: "No Content — deleted successfully; nothing to return.",
-  400: "Bad Request — the server rejected the input.",
-  401: "Unauthorized — this write needs an X-API-Key header.",
-  403: "Forbidden — the key was sent but does not match.",
-  404: "Not Found — this key, note or route does not exist.",
-  405: "Wrong HTTP method — follow the Allow header (PUT for kv, POST for notes).",
-  411: "PUT/POST needs a Content-Length header — fetch adds it automatically.",
-  413: "Body exceeds the 64KB limit — shrink the payload.",
-  415: "Set Content-Type: application/json.",
-  500: "Server-side failure (disk/DB) — check the server logs.",
-  501: "Chunked transfer-encoding is not implemented by this server."
-};
-const EXPLAIN_CODE = {
-  missing_field: "A required JSON field is missing (value, title, body or data).",
-  invalid_key: "Key must match [A-Za-z0-9._-], 1–128 chars.",
-  invalid_id: "Note id must be a positive integer.",
-  invalid_query: "Check limit (1–100) and offset (>= 0).",
-  bad_request: "Malformed JSON, or title outside 1–200 chars.",
-  unauthorized: "Send header X-API-Key: <token>. Get the token from whoever runs the server.",
-  forbidden: "A key was sent but it is wrong. Check for typos.",
-  not_found: "Nothing stored under that key/id.",
-  method_not_allowed: "Use the method shown in the Allow header."
-};
-function explain(status, bodyText) {
-  let out = EXPLAIN_STATUS[status] || ("HTTP " + status + ".");
-  try {
-    const j = JSON.parse(bodyText);
-    if (j && j.error && EXPLAIN_CODE[j.error]) out += " " + EXPLAIN_CODE[j.error];
-  } catch (e) { /* non-JSON body: status text is enough */ }
-  return out;
-}
-/* ---------- request core: real fetch + tracing ---------- */
-let APIKEY = "";
-try { APIKEY = localStorage.getItem("capi-key") || ""; } catch (e) { /* ignore */ }
-let LAST = null;
-const HIST = [];
-const SESS = {};
-function sessHit(label, status) {
-  const cls = status >= 200 && status < 300 ? "ok" : status >= 400 && status < 500 ? "c4" : "c5";
-  if (!SESS[label]) SESS[label] = { ok: 0, c4: 0, c5: 0 };
-  SESS[label][cls]++;
-  const rows = Object.keys(SESS).sort().map(k => {
-    const s = SESS[k], tot = s.ok + s.c4 + s.c5;
-    return "<tr><td>" + k + "</td><td>" + s.ok + "</td><td>" + s.c4 + "</td><td>" + s.c5 + "</td><td>" + tot + "</td></tr>";
-  });
-  document.getElementById("sessBody").innerHTML = rows.join("");
-}
-function trace(entry) {
-  LAST = entry;
-  HIST.unshift(entry);
-  if (HIST.length > 15) HIST.pop();
-  const stamp = new Date().toLocaleTimeString();
-  const last = document.getElementById("devLast");
-  last.textContent =
-    entry.method + " " + entry.path + " → " + entry.status + " · " + entry.ms + "ms · " + entry.bytes + " bytes\n" +
-    "-- request --\n" + (entry.reqBody || "(empty)") + "\n-- response --\n" + entry.respBody;
-  last.scrollTop = last.scrollHeight;
-  document.getElementById("devExplainTxt").textContent = explain(entry.status, entry.respBody);
-  document.getElementById("devHist").textContent =
-    HIST.map(h => stamp + "  " + h.method + " " + h.path + " → " + h.status + " · " + h.ms + "ms").join("\n");
-  sessHit(entry.label || (entry.method + " " + entry.path), entry.status);
-}
-function buildCurl(method, path, headers, raw) {
-  let cmd = "curl -X " + method + " " + location.origin + path;
-  Object.keys(headers).forEach(k => { cmd += " -H '" + k + ": " + headers[k] + "'"; });
-  if (raw) cmd += " -d '" + raw.replace(/'/g, "'\\''") + "'";
-  return cmd;
-}
-async function doFetch(method, path, raw, headers) {
-  const opt = { method, headers: Object.assign({}, headers) };
-  if (raw && method !== "GET" && method !== "DELETE") opt.body = raw;
-  const t0 = performance.now();
-  const r = await fetch(path, opt);
-  const txt = await r.text();
-  return { status: r.status, ms: Math.round(performance.now() - t0), bytes: txt.length, text: txt };
-}
-async function req(method, path, body, ui, extra) {
-  const show = ui !== false;
-  const ex = extra || {};
-  const headers = Object.assign({}, ex.headers);
-  let raw = "";
-  if (body !== undefined) {
-    raw = JSON.stringify(body);
-    headers["Content-Type"] = "application/json";
-  }
-  if (!ex.noAuth && APIKEY && method !== "GET") headers["X-API-Key"] = APIKEY;
-  const res = await doFetch(method, path, raw, headers);
-  let pretty = res.text;
-  try { pretty = JSON.stringify(JSON.parse(res.text), null, 2); } catch (e) { /* keep raw */ }
-  if (show) {
-    trace({ method, path, reqBody: raw, headers, status: res.status, ms: res.ms,
-            bytes: res.bytes, respBody: res.text, label: ex.label });
-    if (res.status < 200 || res.status >= 300) toast(res.status + " " + pretty);
-  }
-  return { status: res.status, body: pretty, ms: res.ms, bytes: res.bytes };
-}
-/* Human result box + one-line tech line. */
-function show(outId, techId, res, human, humanOk) {
-  const el = document.getElementById(outId);
-  el.textContent = human;
-  el.classList.remove("good", "fail");
-  el.classList.add(humanOk ? "good" : "fail");
-  if (techId) document.getElementById(techId).textContent = res.tech;
-}
-function techOf(method, path, res) {
-  return method + " " + path + " → HTTP " + res.status + " · " + res.ms + "ms · " + res.bytes + " bytes";
-}
-async function go(btn, fn) {
-  if (btn.disabled) return;
-  btn.disabled = true;
-  const old = btn.textContent;
-  btn.textContent = "…";
-  try { await window[fn](); } catch (e) { toast("network error: " + e); }
-  finally { btn.disabled = false; btn.textContent = old; }
-}
-function copyCurl() {
-  if (!LAST) { toast("nothing to copy yet"); return; }
-  const cmd = buildCurl(LAST.method, LAST.path, LAST.headers || {}, LAST.reqBody);
-  const done = () => toast("copied to clipboard", true);
-  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(cmd).then(done, () => toast(cmd));
-  else toast(cmd);
-}
-function clearHist() {
-  HIST.length = 0;
-  document.getElementById("devHist").textContent = "—";
-}
-/* ---------- 💾 save / fetch / delete ---------- */
-function kvVals() {
-  return { key: document.getElementById("kvKey").value.trim(), val: document.getElementById("kvVal").value };
-}
-async function kvSave() {
-  const v = kvVals();
-  const r = await req("PUT", "/api/kv/" + encodeURIComponent(v.key), { value: v.val }, true,
-                      { label: "PUT /api/kv/:key" });
-  const ok = r.status >= 200 && r.status < 300;
-  show("kvResult", "kvTech", r, ok ? MSGS[LANG].saved(v.key, v.val) : MSGS[LANG].err400(), ok);
-  document.getElementById("kvTech").textContent = techOf("PUT", "/api/kv/" + v.key, r);
-  refresh(true);
-}
-async function kvFetch() {
-  const v = kvVals();
-  const r = await req("GET", "/api/kv/" + encodeURIComponent(v.key), undefined, true, { label: "GET /api/kv/:key" });
-  let human, ok = r.status === 200;
-  if (ok) {
-    try { human = MSGS[LANG].fetched(JSON.parse(r.body).value); }
-    catch (e) { human = MSGS[LANG].fetched(r.body); }
-  } else human = MSGS[LANG].err404();
-  show("kvResult", "kvTech", r, human, ok);
-  document.getElementById("kvTech").textContent = techOf("GET", "/api/kv/" + v.key, r);
-}
-async function kvDel() {
-  const v = kvVals();
-  if (!confirm(v.key + "?")) return;
-  const r = await req("DELETE", "/api/kv/" + encodeURIComponent(v.key), undefined, true,
-                      { label: "DELETE /api/kv/:key" });
-  const ok = r.status === 204;
-  show("kvResult", "kvTech", r, ok ? MSGS[LANG].deleted() : MSGS[LANG].err404(), ok);
-  document.getElementById("kvTech").textContent = techOf("DELETE", "/api/kv/" + v.key, r);
-  refresh(true);
-}
-/* ---------- 📝 notes ---------- */
-function noteVals() {
-  return { title: document.getElementById("nTitle").value, body: document.getElementById("nBody").value };
-}
-async function noteCreate() {
-  const v = noteVals();
-  const r = await req("POST", "/api/notes", { title: v.title, body: v.body }, true, { label: "POST /api/notes" });
-  let human, ok = r.status === 201;
-  if (ok) {
-    try { human = MSGS[LANG].noteMade(JSON.parse(r.body).id); }
-    catch (e) { human = MSGS[LANG].noteMade("?"); }
-  } else human = MSGS[LANG].err400();
-  show("nResult", "nTech", r, human, ok);
-  document.getElementById("nTech").textContent = techOf("POST", "/api/notes", r);
-  refresh(true);
-  noteList();
-}
-async function noteList() {
-  const r = await req("GET", "/api/notes?limit=50", undefined, true, { label: "GET /api/notes" });
-  let human = MSGS[LANG].notesListed(0), items = [];
-  try {
-    const j = JSON.parse(r.body);
-    items = j.items || [];
-    human = MSGS[LANG].notesListed(j.total !== undefined ? j.total : items.length);
-  } catch (e) { human = MSGS[LANG].err400(); }
-  show("nResult", "nTech", r, human, r.status === 200);
-  document.getElementById("nTech").textContent = techOf("GET", "/api/notes?limit=50", r);
-  const live = document.getElementById("notesLive");
-  live.innerHTML = "";
-  items.forEach(n => {
-    const div = document.createElement("div");
-    div.className = "notecard";
-    const b = document.createElement("b");
-    b.textContent = "#" + n.id + " " + n.title;
-    const p = document.createElement("p");
-    p.textContent = n.body;
-    const ops = document.createElement("div");
-    ops.className = "ops";
-    const edit = document.createElement("button");
-    edit.className = "ghost";
-    edit.textContent = "✏️";
-    edit.setAttribute("aria-label", "edit note " + n.id);
-    edit.addEventListener("click", () => {
-      document.getElementById("nTitle").value = n.title;
-      document.getElementById("nBody").value = n.body;
-      noteUpdateById(n.id);
-    });
-    const del = document.createElement("button");
-    del.className = "ghost";
-    del.textContent = "🗑️";
-    del.setAttribute("aria-label", "delete note " + n.id);
-    del.addEventListener("click", () => noteDelById(n.id));
-    ops.appendChild(edit);
-    ops.appendChild(del);
-    div.appendChild(b);
-    div.appendChild(p);
-    div.appendChild(ops);
-    live.appendChild(div);
-  });
-}
-async function noteUpdateById(id) {
-  const v = noteVals();
-  const r = await req("PUT", "/api/notes/" + id, { title: v.title, body: v.body }, true,
-                      { label: "PUT /api/notes/:id" });
-  show("nResult", "nTech", r, r.status === 200 ? MSGS[LANG].noteMade(id) : MSGS[LANG].err404(),
-       r.status === 200);
-  document.getElementById("nTech").textContent = techOf("PUT", "/api/notes/" + id, r);
-  refresh(true);
-  noteList();
-}
-async function noteDelById(id) {
-  if (!confirm("#" + id + "?")) return;
-  const r = await req("DELETE", "/api/notes/" + id, undefined, true, { label: "DELETE /api/notes/:id" });
-  show("nResult", "nTech", r, r.status === 204 ? MSGS[LANG].noteGone(id) : MSGS[LANG].err404(), r.status === 204);
-  document.getElementById("nTech").textContent = techOf("DELETE", "/api/notes/" + id, r);
-  refresh(true);
-  noteList();
-}
-/* ---------- 🔐 vault ---------- */
-function vaultKey() {
-  const v = document.getElementById("apiPass").value;
-  try { localStorage.setItem("capi-key", v); } catch (e) { /* ignore */ }
-  APIKEY = v;
-  return v;
-}
-async function authGood() {
-  const key = vaultKey();
-  if (!key) { toast("type a password first"); return; }
-  const r = await req("PUT", "/api/kv/authtest", { value: "ok" }, true, { label: "PUT /api/kv/:key (auth)" });
-  show("authResult", "authTech", r, r.status === 200
-    ? (window.__authOpen ? MSGS[LANG].authOpen() : MSGS[LANG].authOk()) : MSGS[LANG].authBad(), r.status === 200);
-  document.getElementById("authTech").textContent = techOf("PUT", "/api/kv/authtest", r) + " · X-API-Key: ••••";
-  refresh(true);
-}
-async function authBad() {
-  vaultKey();
-  const raw = JSON.stringify({ value: "ok" });
-  const res = await doFetch("PUT", "/api/kv/authtest", raw,
-                            { "Content-Type": "application/json", "X-API-Key": "senha-errada" });
-  trace({ method: "PUT", path: "/api/kv/authtest", reqBody: raw, status: res.status, ms: res.ms,
-          bytes: res.bytes, respBody: res.text, label: "PUT /api/kv/:key (wrong key)" });
-  const r = { status: res.status, ms: res.ms, bytes: res.bytes };
-  show("authResult", "authTech", r, res.status === 403 ? MSGS[LANG].authBad() : MSGS[LANG].authOpen(),
-       res.status === 403 || (res.status === 200 && window.__authOpen));
-  document.getElementById("authTech").textContent = techOf("PUT", "/api/kv/authtest", r) + " · X-API-Key: senha-errada";
-  refresh(true);
-}
-async function authNone() {
-  vaultKey();
-  const r = await req("PUT", "/api/kv/authtest", { value: "ok" }, true,
-                      { noAuth: true, label: "PUT /api/kv/:key (no key)" });
-  show("authResult", "authTech", r, r.status === 401 ? MSGS[LANG].authNone() : MSGS[LANG].authOpen(),
-       r.status === 401 || (r.status === 200 && window.__authOpen));
-  document.getElementById("authTech").textContent = techOf("PUT", "/api/kv/authtest", r) + " · no key sent";
-  refresh(true);
-}
-/* ---------- 📡 echo ---------- */
-async function doEcho() {
-  const text = document.getElementById("echoIn").value;
-  const r = await req("POST", "/api/echo", { data: text }, true, { label: "POST /api/echo" });
-  let human, ok = r.status === 200;
-  if (ok) {
-    try { human = MSGS[LANG].echoGot(text, JSON.parse(r.body).data); }
-    catch (e) { human = MSGS[LANG].echoGot(text, r.body); }
-  } else human = MSGS[LANG].err400();
-  show("echoResult", "echoTech", r, human, ok);
-  document.getElementById("echoTech").textContent = techOf("POST", "/api/echo", r);
-}
-/* ---------- 💥 error gallery (real rejections) ---------- */
-async function errGone() {
-  const r = await req("GET", "/api/kv/nunca-existiu", undefined, true, { label: "GET /api/kv/:key (gone)" });
-  show("errResult", "errTech", r, MSGS[LANG].err404(), false);
-  document.getElementById("errTech").textContent = techOf("GET", "/api/kv/nunca-existiu", r);
-}
-async function errAuth() {
-  const res = await doFetch("PUT", "/api/kv/authtest", JSON.stringify({ value: "ok" }),
-                            { "Content-Type": "application/json", "X-API-Key": "senha-errada" });
-  trace({ method: "PUT", path: "/api/kv/authtest", reqBody: '{"value":"ok"}', status: res.status, ms: res.ms,
-          bytes: res.bytes, respBody: res.text, label: "PUT /api/kv/:key (wrong key)" });
-  const r = { status: res.status, ms: res.ms, bytes: res.bytes };
-  show("errResult", "errTech", r, res.status === 403 ? MSGS[LANG].err403() : MSGS[LANG].authOpen(), false);
-  document.getElementById("errTech").textContent = techOf("PUT", "/api/kv/authtest", r);
-}
-async function errData() {
-  const r = await req("PUT", "/api/kv/demo", { nope: 1 }, true, { label: "PUT /api/kv/:key (missing)" });
-  show("errResult", "errTech", r, MSGS[LANG].err400(), false);
-  document.getElementById("errTech").textContent = techOf("PUT", "/api/kv/demo", r);
-}
-async function errOp() {
-  const r = await req("POST", "/health", {}, true, { label: "POST /health (method)" });
-  show("errResult", "errTech", r, MSGS[LANG].err405(), false);
-  document.getElementById("errTech").textContent = techOf("POST", "/health", r);
-}
-async function errBig() {
-  const r = await req("PUT", "/api/kv/big", { value: "x".repeat(70000) }, true,
-                      { label: "PUT /api/kv/:key (oversized)" });
-  show("errResult", "errTech", r, MSGS[LANG].err413(), false);
-  document.getElementById("errTech").textContent = techOf("PUT", "/api/kv/big", r);
-}
-async function errRoute() {
-  const r = await req("GET", "/lugar-nenhum", undefined, true, { label: "GET /lugar-nenhum (route)" });
-  show("errResult", "errTech", r, MSGS[LANG].err404(), false);
-  document.getElementById("errTech").textContent = techOf("GET", "/lugar-nenhum", r);
-}
-/* ---------- ⚡ performance: N real requests ---------- */
-let PERF_N = 10;
-function perfSet(n) {
-  PERF_N = n;
-  document.querySelectorAll("[data-perf]").forEach(b =>
-    b.classList.toggle("act", parseInt(b.getAttribute("data-perf"), 10) === n));
-}
-async function perfRun() {
-  const n = PERF_N;
-  const t0 = performance.now();
-  const results = await Promise.all(
-    Array.from({ length: n }, () =>
-      fetch("/health").then(async r => ({ ok: r.ok })).catch(() => ({ ok: false }))));
-  const ms = Math.round(performance.now() - t0);
-  const errs = results.filter(x => !x.ok).length;
-  const avg = (ms / n).toFixed(1);
-  const el = document.getElementById("perfResult");
-  el.textContent = MSGS[LANG].perf(n, errs, ms, avg);
-  el.classList.remove("good", "fail");
-  el.classList.add(errs === 0 ? "good" : "fail");
-  document.getElementById("perfTech").textContent =
-    n + "× GET /health → HTTP 200 ×" + (n - errs) + " · " + ms + "ms total · " + avg + "ms avg";
-  for (let i = 0; i < n; i++) sessHit("GET /health (perf)", i < n - errs ? 200 : 500);
-  trace({ method: "GET", path: "/health ×" + n, reqBody: "", status: errs === 0 ? 200 : 500, ms,
-          bytes: 0, respBody: MSGS[LANG].perf(n, errs, ms, avg), label: "GET /health (perf)" });
-  refresh(true);
-}
-/* ---------- inspector composer ---------- */
-function parseHeaders(text) {
-  const out = {};
-  const lines = text.split("\n");
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (!line) continue;
-    const colon = line.indexOf(":");
-    if (colon <= 0) throw new Error("bad header line " + (i + 1) + ": " + line);
-    out[line.slice(0, colon).trim()] = line.slice(colon + 1).trim();
-  }
-  return out;
-}
-async function composerGo() {
-  const method = document.getElementById("cMethod").value;
-  const path = document.getElementById("cPath").value.trim() || "/";
-  let headers;
-  try { headers = parseHeaders(document.getElementById("cHeaders").value); }
-  catch (e) { toast("400 local: " + e.message); return; }
-  const raw = document.getElementById("cBody").value;
-  if (raw && !headers["Content-Type"] && !headers["content-type"])
-    headers["Content-Type"] = "application/json";
-  const res = await doFetch(method, path, raw, headers);
-  trace({ method, path, reqBody: raw, headers, status: res.status, ms: res.ms,
-          bytes: res.bytes, respBody: res.text, label: method + " " + path + " (composer)" });
-  if (res.status < 200 || res.status >= 300) toast(res.status + " " + res.text.slice(0, 200));
-  else toast(res.status + " · " + res.ms + "ms · " + res.bytes + " bytes", true);
-}
-function toast(msg, ok) {
-  const t = document.getElementById("toast");
-  const d = document.createElement("div");
-  if (ok) d.className = "ok";
-  d.textContent = msg;
-  t.appendChild(d);
-  setTimeout(() => d.remove(), 6000);
-}
-async function refresh(silent) {
-  try {
-    const h = await req("GET", "/health", undefined, !silent, { label: "GET /health" });
-    const m = await req("GET", "/metrics", undefined, false, { label: "GET /metrics" });
-    const hj = JSON.parse(h.body), mj = JSON.parse(m.body);
-    document.getElementById("dot").className = "dot ok";
-    document.getElementById("healthLine").textContent =
-      "version " + hj.version + " · uptime " + hj.uptime_s + "s";
-    document.getElementById("mReq").textContent = mj.http_requests;
-    document.getElementById("mErr").textContent = mj.http_errors;
-    document.getElementById("mKv").textContent = mj.kv_count;
-    document.getElementById("mNotes").textContent = mj.notes_count;
-    document.getElementById("mConn").textContent = mj.connections_accepted;
-    window.__authOpen = hj.auth !== "protected";
-    const mode = document.getElementById("authMode");
-    mode.textContent = window.__authOpen ? "open" : "protected";
-    mode.className = "badge " + (window.__authOpen ? "open" : "protected");
-    const notice = document.getElementById("authNotice");
-    if (window.__authOpen) {
-      notice.hidden = false;
-      notice.textContent = I18N[LANG].openNote;
-    } else notice.hidden = true;
-  } catch (e) {
-    document.getElementById("dot").className = "dot bad";
-    document.getElementById("healthLine").textContent = "unreachable: " + e;
-  }
-}
-document.querySelectorAll("[data-perf]").forEach(b =>
-  b.addEventListener("click", () => perfSet(parseInt(b.getAttribute("data-perf"), 10))));
-/* ---------- 🌎 same task, five languages (honest labels) ---------- */
-const IMPL = ["c", "python", "go", "rust", "node"];
-const IMPLNAME = { c: "C", python: "Python", go: "Go", rust: "Rust", node: "Node.js" };
-const CMP = {
-  save: {
-    c: { loc: "~12", lib: "libsqlite3 (C API)", real: true, code:
-`/* real code from this server (src/store_sqlite.c) */
-sqlite3_prepare_v2(db,
-  "INSERT INTO kv(key,value,updated_at) VALUES(?,?,?) "
-  "ON CONFLICT(key) DO UPDATE SET value=excluded.value;",
-  -1, &stmt, NULL);
-sqlite3_bind_text(stmt, 1, "demo", -1, SQLITE_TRANSIENT);
-sqlite3_bind_text(stmt, 2, "funcionando", -1, SQLITE_TRANSIENT);
-sqlite3_bind_int64(stmt, 3, (sqlite3_int64)time(NULL));
-if (sqlite3_step(stmt) != SQLITE_DONE) return API_ERR_INTERNAL;
-sqlite3_finalize(stmt);` },
-    python: { loc: "~10", lib: "urllib (stdlib)", code:
-`import json, urllib.request  # stdlib only
-body = json.dumps({"value": "funcionando"}).encode()
-req = urllib.request.Request("http://127.0.0.1:8080/api/kv/demo",
-    data=body, method="PUT",
-    headers={"Content-Type": "application/json", "X-API-Key": KEY})
-try:
-    with urllib.request.urlopen(req, timeout=5) as r:
-        print(r.status, r.read().decode())  # 200
-except urllib.error.HTTPError as e:
-    print("rejected:", e.code)  # errors are exceptions` },
-    go: { loc: "~12", lib: "net/http (stdlib)", code:
-`import ("bytes"; "encoding/json"; "fmt"; "net/http")  // stdlib only
-body, _ := json.Marshal(map[string]string{"value": "funcionando"})
-req, _ := http.NewRequest("PUT", "http://127.0.0.1:8080/api/kv/demo",
-    bytes.NewReader(body))
-req.Header.Set("Content-Type", "application/json")
-req.Header.Set("X-API-Key", key)
-resp, err := http.DefaultClient.Do(req)  // errors are values
-if err != nil { log.Fatal(err) }
-defer resp.Body.Close()
-fmt.Println(resp.Status)  // 200 OK` },
-    rust: { loc: "~9", lib: "reqwest + serde_json (crates)", code:
-`// crates: reqwest (blocking), serde_json
-let res = reqwest::blocking::Client::new()
-    .put("http://127.0.0.1:8080/api/kv/demo")
-    .header("Content-Type", "application/json")
-    .header("X-Api-Key", &key)
-    .json(&serde_json::json!({"value": "funcionando"}))
-    .send()?;  // Result must be handled
-println!("{}", res.status());  // 200 OK` },
-    node: { loc: "~8", lib: "fetch (built-in 18+)", code:
-`// global fetch, Node 18+ — no packages
-const res = await fetch("http://127.0.0.1:8080/api/kv/demo", {
-  method: "PUT",
-  headers: { "Content-Type": "application/json", "X-API-Key": key },
-  body: JSON.stringify({ value: "funcionando" }),
-});
-console.log(res.status, await res.text());  // rejections throw` }
-  },
-  get: {
-    c: { loc: "~9", lib: "libsqlite3 (C API)", real: true, code:
-`/* real code from this server (src/store_sqlite.c) */
-sqlite3_prepare_v2(db, "SELECT value FROM kv WHERE key=?;",
-    -1, &stmt, NULL);
-sqlite3_bind_text(stmt, 1, "demo", -1, SQLITE_TRANSIENT);
-rc = sqlite3_step(stmt);
-if (rc == SQLITE_ROW) value = sqlite3_column_text(stmt, 0);
-else if (rc == SQLITE_DONE) return API_ERR_NOT_FOUND;
-sqlite3_finalize(stmt);` },
-    python: { loc: "~7", lib: "urllib (stdlib)", code:
-`try:
-    with urllib.request.urlopen(
-            "http://127.0.0.1:8080/api/kv/demo", timeout=5) as r:
-        print(r.status, r.read().decode())  # 200
-except urllib.error.HTTPError as e:
-    print("missing:" if e.code == 404 else "error:", e.code)` },
-    go: { loc: "~9", lib: "net/http (stdlib)", code:
-`resp, err := http.Get("http://127.0.0.1:8080/api/kv/demo")
-if err != nil { log.Fatal(err) }
-defer resp.Body.Close()
-if resp.StatusCode == 404 { fmt.Println("missing") }` },
-    rust: { loc: "~7", lib: "reqwest (crate)", code:
-`let res = reqwest::blocking::get(
-    "http://127.0.0.1:8080/api/kv/demo")?;
-if res.status().as_u16() == 404 { println!("missing"); }` },
-    node: { loc: "~6", lib: "fetch (built-in 18+)", code:
-`const res = await fetch("http://127.0.0.1:8080/api/kv/demo");
-console.log(res.status === 404 ? "missing" : await res.text());` }
-  },
-  del: {
-    c: { loc: "~8", lib: "libsqlite3 (C API)", real: true, code:
-`/* real code from this server (src/store_sqlite.c) */
-sqlite3_prepare_v2(db, "DELETE FROM kv WHERE key=?;",
-    -1, &stmt, NULL);
-sqlite3_bind_text(stmt, 1, "demo", -1, SQLITE_TRANSIENT);
-rc = sqlite3_step(stmt);
-changes = sqlite3_changes(db);  /* 0 = nothing deleted */
-sqlite3_finalize(stmt);
-return changes > 0 ? API_OK : API_ERR_NOT_FOUND;` },
-    python: { loc: "~7", lib: "urllib (stdlib)", code:
-`req = urllib.request.Request("http://127.0.0.1:8080/api/kv/demo",
-    method="DELETE")
-with urllib.request.urlopen(req, timeout=5) as r:
-    print(r.status)  # 204 = deleted, nothing to read` },
-    go: { loc: "~8", lib: "net/http (stdlib)", code:
-`req, _ := http.NewRequest("DELETE",
-    "http://127.0.0.1:8080/api/kv/demo", nil)
-resp, err := http.DefaultClient.Do(req)
-if err != nil { log.Fatal(err) }
-defer resp.Body.Close()  // 204 has no body` },
-    rust: { loc: "~7", lib: "reqwest (crate)", code:
-`let res = reqwest::blocking::Client::new()
-    .delete("http://127.0.0.1:8080/api/kv/demo").send()?;
-println!("{}", res.status());  // 204 No Content` },
-    node: { loc: "~5", lib: "fetch (built-in 18+)", code:
-`const res = await fetch("http://127.0.0.1:8080/api/kv/demo",
-    { method: "DELETE" });
-console.log(res.status);  // 204` }
-  },
-  note: {
-    c: { loc: "~10", lib: "libsqlite3 (C API)", real: true, code:
-`/* real code from this server (src/store_sqlite.c) */
-sqlite3_prepare_v2(db,
-  "INSERT INTO notes(title,body,created_at,updated_at) "
-  "VALUES(?,?,?,?);", -1, &stmt, NULL);
-sqlite3_bind_text(stmt, 1, title, -1, SQLITE_TRANSIENT);
-sqlite3_bind_text(stmt, 2, body, -1, SQLITE_TRANSIENT);
-sqlite3_step(stmt);
-id = sqlite3_last_insert_rowid(db);  /* auto-increment id */
-sqlite3_finalize(stmt);` },
-    python: { loc: "~8", lib: "urllib (stdlib)", code:
-`body = json.dumps({"title": "hello", "body": "..."}).encode()
-req = urllib.request.Request("http://127.0.0.1:8080/api/notes",
-    data=body, method="POST",
-    headers={"Content-Type": "application/json", "X-API-Key": KEY})
-with urllib.request.urlopen(req, timeout=5) as r:
-    print(r.status, json.loads(r.read())["id"])  # 201 + id` },
-    go: { loc: "~11", lib: "net/http (stdlib)", code:
-`body, _ := json.Marshal(map[string]string{
-    "title": "hello", "body": "..."})
-req, _ := http.NewRequest("POST", "http://127.0.0.1:8080/api/notes",
-    bytes.NewReader(body))
-req.Header.Set("Content-Type", "application/json")
-req.Header.Set("X-API-Key", key)
-resp, err := http.DefaultClient.Do(req)  // 201 Created
-if err != nil { log.Fatal(err) }
-defer resp.Body.Close()` },
-    rust: { loc: "~9", lib: "reqwest + serde_json (crates)", code:
-`let res = reqwest::blocking::Client::new()
-    .post("http://127.0.0.1:8080/api/notes")
-    .header("X-Api-Key", &key)
-    .json(&serde_json::json!({"title": "hello", "body": "..."}))
-    .send()?;  // 201 Created + {"id": N, ...}` },
-    node: { loc: "~8", lib: "fetch (built-in 18+)", code:
-`const res = await fetch("http://127.0.0.1:8080/api/notes", {
-  method: "POST",
-  headers: { "Content-Type": "application/json", "X-API-Key": key },
-  body: JSON.stringify({ title: "hello", body: "..." }),
-});
-console.log(res.status, (await res.json()).id);  // 201` }
-  },
-  echo: {
-    c: { loc: "~6", lib: "POSIX sockets", real: true, code:
-`/* real code from this server (src/server.c) */
-ssize_t n = recv(fd, buf, sizeof(buf), 0);  /* partial reads */
-if (n == 0) return;  /* peer closed */
-server_send_all(fd, buf, (size_t)n);  /* loop until all sent */` },
-    python: { loc: "~6", lib: "urllib (stdlib)", code:
-`body = json.dumps({"data": "hello"}).encode()
-req = urllib.request.Request("http://127.0.0.1:8080/api/echo",
-    data=body, method="POST",
-    headers={"Content-Type": "application/json"})
-with urllib.request.urlopen(req, timeout=5) as r:
-    print(json.loads(r.read())["data"])  # same bytes back` },
-    go: { loc: "~9", lib: "net/http (stdlib)", code:
-`body, _ := json.Marshal(map[string]string{"data": "hello"})
-resp, err := http.Post("http://127.0.0.1:8080/api/echo",
-    "application/json", bytes.NewReader(body))
-if err != nil { log.Fatal(err) }
-defer resp.Body.Close()  // server echoes the bytes` },
-    rust: { loc: "~8", lib: "reqwest + serde_json (crates)", code:
-`let res = reqwest::blocking::Client::new()
-    .post("http://127.0.0.1:8080/api/echo")
-    .json(&serde_json::json!({"data": "hello"}))
-    .send()?;
-println!("{}", res.text()?);  // same bytes back` },
-    node: { loc: "~7", lib: "fetch (built-in 18+)", code:
-`const res = await fetch("http://127.0.0.1:8080/api/echo", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ data: "hello" }),
-});
-console.log((await res.json()).data);  // same bytes back` }
-  },
-  auth: {
-    c: { loc: "~7", lib: "hand-rolled (this server)", real: true, code:
-`/* real code from this server (src/server.c) */
-if (req->api_key[0] == '\\0') return API_ERR_UNAUTHORIZED;  /* 401 */
-return key_matches(server->api_key, req->api_key)  /* constant-time */
-    ? API_OK : API_ERR_FORBIDDEN;                  /* 200 / 403 */` },
-    python: { loc: "~9", lib: "urllib (stdlib)", code:
-`req = urllib.request.Request(url, data=body, method="PUT",
-    headers={"X-API-Key": key})  # header attached by hand
-try:
-    urllib.request.urlopen(req, timeout=5)
-except urllib.error.HTTPError as e:
-    print({401: "no/invalid key sent", 403: "wrong key"}[e.code])` },
-    go: { loc: "~10", lib: "net/http (stdlib)", code:
-`req.Header.Set("X-API-Key", key)  // header attached by hand
-resp, err := http.DefaultClient.Do(req)
-switch resp.StatusCode {
-case 200: fmt.Println("allowed")
-case 401: fmt.Println("no key sent")
-case 403: fmt.Println("wrong key")
-}` },
-    rust: { loc: "~9", lib: "reqwest (crate)", code:
-`let res = client.put(url)
-    .header("X-Api-Key", &key)  // header attached by hand
-    .body(body).send()?;
-match res.status().as_u16() {
-    200 => println!("allowed"),
-    401 => println!("no key sent"),
-    403 => println!("wrong key"),
-    s => println!("other: {}", s),
-}` },
-    node: { loc: "~9", lib: "fetch (built-in 18+)", code:
-`const res = await fetch(url, {  // header attached by hand
-  method: "PUT", headers: { "X-API-Key": key }, body,
-});
-console.log({ 200: "allowed", 401: "no key sent",
-              403: "wrong key" }[res.status] || res.status);` }
-  }
-};
-const LANGNOTES = {
-  en: {
-    c: "You manage memory, buffers and syscalls yourself; errors are return codes you must check; threads and mutexes are explicit; SQLite via the libsqlite3 C API.",
-    python: "The same op takes far fewer explicit lines (urllib, stdlib); errors surface as exceptions; sqlite3 ships in the stdlib; concurrency via threads or asyncio.",
-    go: "Compact stdlib (net/http, encoding/json); errors are values you check; lightweight goroutines for concurrency; SQLite needs an external driver.",
-    rust: "Memory safety checked at compile time; reqwest/serde_json/rusqlite are external crates; errors are Result values handled with ?.",
-    node: "Built-in fetch (18+), async/await style; failures are throws/rejections; SQLite via the external better-sqlite3 package."
-  },
-  pt: {
-    c: "Você gerencia memória, buffers e syscalls; erros são códigos de retorno que você precisa checar; threads e mutex explícitos; SQLite pela C API da libsqlite3.",
-    python: "A mesma operação em bem menos linhas explícitas (urllib, stdlib); erros viram exceções; sqlite3 já vem na stdlib; concorrência com threads ou asyncio.",
-    go: "Stdlib compacta (net/http, encoding/json); erros são valores; goroutines leves para concorrência; SQLite exige driver externo.",
-    rust: "Segurança de memória checada em compilação; reqwest/serde_json/rusqlite são crates externos; erros são Result tratados com ?.",
-    node: "Fetch embutido (18+), estilo async/await; falhas são throws/rejections; SQLite via pacote externo better-sqlite3."
-  },
-  ru: {
-    c: "Памятью, буферами и системными вызовами управляете вы; ошибки — коды возврата; потоки и мьютексы явные; SQLite через C API libsqlite3.",
-    python: "Та же операция в разы короче (urllib, stdlib); ошибки — исключения; sqlite3 уже в stdlib; потоки или asyncio.",
-    go: "Компактная stdlib (net/http, encoding/json); ошибки — значения; лёгкие горутины; для SQLite нужен внешний драйвер.",
-    rust: "Безопасность памяти проверяет компилятор; reqwest/serde_json/rusqlite — внешние крейты; ошибки — Result с ?.",
-    node: "Встроенный fetch (18+), async/await; ошибки — throws/rejections; SQLite через внешний better-sqlite3."
-  }
-};
-const PIECES = [
-  ["httpL", ["libcurl (external)", "urllib (stdlib)", "net/http (stdlib)", "reqwest (crate)", "fetch (built-in 18+)"]],
-  ["jsonL", ["manual parser (this server)", "json (stdlib)", "encoding/json (stdlib)", "serde_json (crate)", "JSON (built-in)"]],
-  ["sqliteL", ["libsqlite3 (C API)", "sqlite3 (stdlib)", "database/sql + driver", "rusqlite (crate)", "better-sqlite3 (pkg)"]],
-  ["errL", ["return codes, checked by hand", "exceptions", "errors as values", "Result + ?", "throw + rejections"]],
-  ["concL", ["pthreads + mutex (explicit)", "threads / asyncio", "goroutines", "threads + Send/Sync", "event loop + async"]],
-  ["memL", ["manual (malloc/free)", "GC", "GC", "borrow checker", "GC (V8)"]]
-];
-const PIECE_L = {
-  en: { httpL: "HTTP client", jsonL: "JSON", sqliteL: "SQLite", errL: "errors", concL: "concurrency", memL: "memory" },
-  pt: { httpL: "cliente HTTP", jsonL: "JSON", sqliteL: "SQLite", errL: "erros", concL: "concorrência", memL: "memória" },
-  ru: { httpL: "HTTP-клиент", jsonL: "JSON", sqliteL: "SQLite", errL: "ошибки", concL: "параллелизм", memL: "память" }
-};
-let CUR_IMPL = "c";
-function escCode(s) {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-function cmpPane(lang, entry, tagTxt, tagCls) {
-  return "<div class=\"cmppane\"><h4>" + IMPLNAME[lang] + "</h4>" +
-    "<div class=\"meta\">≈" + entry.loc + " loc · via " + escCode(entry.lib) +
-    " · <span class=\"tag " + tagCls + "\">" + tagTxt + "</span></div>" +
-    "<pre>" + escCode(entry.code) + "</pre>" +
-    "<div class=\"copyrow\"><button class=\"ghost\" data-copy=\"" + lang + "\">⧉</button></div></div>";
-}
-function renderCmp(div) {
-  const fn = div.getAttribute("data-fn");
-  const data = CMP[fn];
-  if (!data) return;
-  if (!div._sel) div._sel = "c";
-  const sel = div._sel, d = I18N[LANG];
-  let html = "<div class=\"cmptabs\" role=\"group\" aria-label=\"language\">";
-  IMPL.forEach(l => {
-    html += "<button class=\"" + (l === sel ? "active" : "") + "\" data-impl-tab=\"" + l + "\">" + IMPLNAME[l] + "</button>";
-  });
-  html += "</div><div class=\"cmpgrid" + (sel !== "c" ? " side" : "") + "\">";
-  html += cmpPane("c", data.c, d.realTag, "real");
-  if (sel !== "c") html += cmpPane(sel, data[sel], d.demoTag, "demo");
-  html += "</div>";
-  div.innerHTML = html;
-  div.querySelectorAll("[data-impl-tab]").forEach(b =>
-    b.addEventListener("click", () => { div._sel = b.getAttribute("data-impl-tab"); renderCmp(div); }));
-  div.querySelectorAll("[data-copy]").forEach(b =>
-    b.addEventListener("click", () => {
-      const code = data[b.getAttribute("data-copy")].code;
-      if (navigator.clipboard && navigator.clipboard.writeText)
-        navigator.clipboard.writeText(code).then(() => toast(d.copied, true), () => toast(code.slice(0, 120)));
-      else toast(code.slice(0, 120));
-    }));
-}
-function renderLangNote() {
-  document.getElementById("langNote").textContent = LANGNOTES[LANG][CUR_IMPL];
-  document.querySelectorAll("#langBtns2 button").forEach(b =>
-    b.classList.toggle("active", b.getAttribute("data-impl") === CUR_IMPL));
-  const rows = PIECES.map(p => {
-    const cells = p[1].map(c => "<td>" + escCode(c) + "</td>").join("");
-    return "<tr><td>" + PIECE_L[LANG][p[0]] + "</td>" + cells + "</tr>";
-  });
-  document.getElementById("pieceBody").innerHTML = rows.join("");
-}
-document.querySelectorAll("details.cmp").forEach(det =>
-  det.addEventListener("toggle", function () {
-    if (this.open && !this._done) {
-      this._done = true;
-      renderCmp(this.querySelector("[data-fn]"));
-    }
-  }));
-document.querySelectorAll("#langBtns2 button").forEach(b =>
-  b.addEventListener("click", () => { CUR_IMPL = b.getAttribute("data-impl"); renderLangNote(); }));
-document.querySelectorAll("#langBtns button").forEach(b =>
-  b.addEventListener("click", () => setLang(b.getAttribute("data-lang"))));
-document.getElementById("apiPass").value = APIKEY || "demo";
-document.getElementById("healthLine").textContent = I18N[detectLang()].probing;
-setLang(detectLang());
-refresh(false);
-setInterval(() => refresh(true), 5000);
-</script>
+<script type="module" src="lab.js"></script>
 </body>
 </html>

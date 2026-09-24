@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 420" width="1200" height="420" role="img" aria-label="Nuclear reactor core mark">
+  <title>Nuclear C API Server</title>
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#000000"/>
+      <stop offset="70%" stop-color="#0a0703"/>
+      <stop offset="100%" stop-color="#1a1206"/>
+    </linearGradient>
+    <radialGradient id="core" cx="50%" cy="42%" r="50%">
+      <stop offset="0%" stop-color="#fff3b0"/>
+      <stop offset="35%" stop-color="#f5c542"/>
+      <stop offset="75%" stop-color="#b8791a"/>
+      <stop offset="100%" stop-color="#5c3a08" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="stem" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f0b429" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#f0b429" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="420" fill="url(#sky)"/>
+
+  <!-- horizon -->
+  <rect y="330" width="1200" height="90" fill="#050505"/>
+  <path d="M0 330 L1200 330" stroke="#6b4a12" stroke-width="1" opacity="0.5"/>
+
+  <!-- reactor tower, kept abstract -->
+  <g opacity="0.30" fill="#7a5518">
+    <rect x="94" y="150" width="7" height="180"/>
+    <rect x="84" y="140" width="27" height="12"/>
+    <path d="M74 300 L126 300 L120 330 L80 330 Z"/>
+  </g>
+
+  <!-- mushroom stem -->
+  <path d="M556 250 C566 286 570 310 566 332 L640 332 C636 310 640 286 650 250 Z" fill="url(#stem)"/>
+
+  <!-- cap -->
+  <path d="M600 96
+           C700 96 812 132 848 182
+           C880 224 806 252 716 258
+           C648 263 556 260 512 242
+           C456 218 480 172 524 138
+           C548 118 572 104 600 96 Z"
+        fill="#1b1408" stroke="#c9992a" stroke-width="2.5" opacity="0.95"/>
+
+  <!-- inner glow -->
+  <ellipse cx="600" cy="192" rx="150" ry="60" fill="url(#core)" opacity="0.55"/>
+
+  <!-- cap ribs -->
+  <g stroke="#c9992a" stroke-width="1" opacity="0.35" fill="none">
+    <path d="M600 100 C600 140 600 200 600 256"/>
+    <path d="M540 118 C552 156 556 208 560 254"/>
+    <path d="M660 118 C648 156 644 208 640 254"/>
+    <path d="M494 156 C520 184 528 220 534 250"/>
+    <path d="M706 156 C680 184 672 220 666 250"/>
+  </g>
+
+  <!-- trefoil -->
+  <g transform="translate(600 190)" fill="none" stroke="#f5c542" stroke-width="7" opacity="0.92">
+    <circle r="15" fill="#f5c542" stroke="none"/>
+    <path d="M0 -15 A78 78 0 0 1 67.5 52.5 L15 15 A20 20 0 0 0 0 -15 Z"/>
+    <path d="M67.5 52.5 A78 78 0 0 1 -67.5 52.5 L-15 15 A20 20 0 0 0 15 15 Z"/>
+    <path d="M-67.5 52.5 A78 78 0 0 1 0 -15 L0 15 A20 20 0 0 0 -15 15 Z"/>
+  </g>
+
+  <!-- ground reflection -->
+  <ellipse cx="600" cy="336" rx="180" ry="9" fill="#f0b429" opacity="0.18"/>
+
+  <!-- scanlines -->
+  <g opacity="0.05">
+    <rect y="0" width="1200" height="2" fill="#ffffff"/>
+    <rect y="6" width="1200" height="2" fill="#ffffff"/>
+    <rect y="12" width="1200" height="2" fill="#ffffff"/>
+  </g>
+</svg>

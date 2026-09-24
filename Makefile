@@ -20,6 +20,7 @@ TEST_SRC := $(wildcard tests/*.c)
 SERVER_OBJ_NO_MAIN := $(filter-out $(BUILD_DIR)/main.o,$(OBJ))
 TEST_BIN := $(BUILD_DIR)/test_server
 TEST_API_BIN := $(BUILD_DIR)/test_api
+TEST_CONSOLE_BIN := $(BUILD_DIR)/test_console
 
 PREFIX ?= /usr/local
 BINDIR := $(PREFIX)/bin
@@ -38,10 +39,17 @@ all: $(BIN)
 $(BUILD_DIR)/%.o: src/%.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-# Embedded frontend: generated header keeps the binary self-contained
-# (no runtime dependency on the web/ directory).
-$(BUILD_DIR)/frontend.h: web/index.html scripts/embed.py | $(BUILD_DIR)
-	python3 scripts/embed.py web/index.html $@ frontend_html
+# Frontend bundle: web/ is split into modules for maintainability, then
+# inlined into one document so the binary stays self-contained.
+WEB_SRC := web/index.html web/styles.css web/i18n.js web/compare.js web/api.js web/lab.js
+WEB_BUNDLE := $(BUILD_DIR)/frontend.html
+
+$(WEB_BUNDLE): $(WEB_SRC) scripts/build_web.py | $(BUILD_DIR)
+	python3 scripts/build_web.py web $@
+
+# Embedded frontend: generated header keeps the binary self-contained.
+$(BUILD_DIR)/frontend.h: $(WEB_BUNDLE) scripts/embed.py | $(BUILD_DIR)
+	python3 scripts/embed.py $(WEB_BUNDLE) $@ frontend_html
 
 $(BUILD_DIR)/api.o: $(BUILD_DIR)/frontend.h
 
@@ -55,15 +63,20 @@ clean:
 	rm -rf build build-asan
 
 # Unit + integration tests (C, sqlite linked).
-test: $(TEST_BIN) $(TEST_API_BIN)
+test: $(TEST_BIN) $(TEST_API_BIN) $(TEST_CONSOLE_BIN)
 	./$(TEST_BIN)
 	@if [ -x ./$(TEST_API_BIN) ]; then ./$(TEST_API_BIN); fi
+	./$(TEST_CONSOLE_BIN)
 
 $(TEST_BIN): $(SERVER_OBJ_NO_MAIN) tests/test_server.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) $(SERVER_OBJ_NO_MAIN) tests/test_server.c -o $@ $(LDFLAGS) $(LDLIBS)
 
 $(TEST_API_BIN): $(SERVER_OBJ_NO_MAIN) tests/test_api.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) $(SERVER_OBJ_NO_MAIN) tests/test_api.c -o $@ $(LDFLAGS) $(LDLIBS)
+
+# Console UI tests need only console.o, never the network stack.
+$(TEST_CONSOLE_BIN): $(BUILD_DIR)/console.o tests/test_console.c | $(BUILD_DIR)
+	$(CC) $(CFLAGS) $(BUILD_DIR)/console.o tests/test_console.c -o $@ $(LDFLAGS)
 
 # ASan+UBSan in an isolated dir so instrumented objects never mix with normal ones.
 sanitize:
@@ -81,11 +94,16 @@ install: $(BIN)
 	install -d $(DESTDIR)$(BINDIR)
 	install -m 755 $(BIN) $(DESTDIR)$(BINDIR)/c-echo-server
 
-# Run everything: build + start server with sane defaults.
+# Portable screen clear: tput when available, ANSI escape otherwise.
+CLEAR = @if command -v tput >/dev/null 2>&1; then tput clear 2>/dev/null || printf '\033[2J\033[H'; \
+	else printf '\033[2J\033[H'; fi
+
+# Run everything: clear, boot animation, reactor screen, then the server.
 # Overrides: make run RUN_PORT=8081 RUN_DB=./data/dev.db RUN_API_KEY=secret
 run: $(BIN)
-	mkdir -p $(dir $(RUN_DB))
-	./$(BIN) --bind $(RUN_BIND) --port $(RUN_PORT) --threads $(RUN_THREADS) --db $(RUN_DB) $(RUN_FLAGS)
+	@mkdir -p $(dir $(RUN_DB))
+	@$(CLEAR)
+	@./$(BIN) --bind $(RUN_BIND) --port $(RUN_PORT) --threads $(RUN_THREADS) --db $(RUN_DB) $(RUN_FLAGS)
 
 help:
 	@echo "Targets: all | test | sanitize | format-check | clean | install | run"

@@ -1,8 +1,85 @@
-# C HTTP API Server (thread-pool + SQLite)
+<div align="center">
 
-Minimal, correct, and observable HTTP/1.1 JSON API in C11. Bounded
-thread-pool, SQLite WAL storage, typed errors with correct status codes,
-strict warnings, ASan/UBSan clean, 35 tests.
+<img src="docs/assets/reactor-core.svg" alt="Nuclear reactor core mark" width="620">
+
+# Nuclear C API Server
+
+**A hand-written HTTP/1.1 JSON API server in C, presented as a reactor control panel.**
+
+`thread-pool` &middot; `SQLite WAL` &middot; `typed errors` &middot; `zero runtime dependencies`
+
+---
+
+```bash
+make run
+```
+
+</div>
+
+> The "radiation" readouts are **visual theme only** — they are not measured
+> values. Every number the server reports comes from a real counter.
+
+---
+
+## Features
+
+- **HTTP/1.1** server written from scratch: request line, headers, `Content-Length`, bounded body
+- **JSON** encode/decode with strict validation and typed error codes
+- **SQLite (WAL)** storage with prepared statements, `busy_timeout`, checkpoint on shutdown
+- **Bounded thread pool** with a fixed connection queue and explicit backpressure
+- **Optional API key** (`X-API-Key`) with constant-time comparison: `401` missing, `403` wrong
+- **Typed errors** mapped 1:1 to status codes — no silent fallbacks anywhere
+- **Observability** — structured logs, `/health`, `/metrics`, per-request inspector in the lab
+- **Embedded lab** — a single-file interactive playground served at `GET /`
+- **Strict build** — `-Wall -Wextra -Werror -Wconversion -Wshadow -pedantic`, ASan/UBSan clean
+- **Terminal UI** — responsive box layout, boot sequence, UTF-8 with ASCII fallback
+
+## Quick Start
+
+```bash
+# dependencies
+sudo apt install build-essential libsqlite3-dev   # Debian/Ubuntu
+
+make run                                            # boot + start on :8080
+make run RUN_API_KEY=demo                           # protected mode (401/403)
+make run RUN_PORT=8081 RUN_DB=./data/dev.db         # custom port and database
+```
+
+Then open **<http://127.0.0.1:8080/>** — every lab section ships prefilled
+examples, so you can click through save, fetch, delete, notes, auth, errors
+and a live performance run without writing a request by hand.
+
+```bash
+curl localhost:8080/health
+curl -X PUT localhost:8080/api/kv/theme \
+     -H 'Content-Type: application/json' -d '{"value":"dark"}'
+curl localhost:8080/api/kv/theme
+```
+
+## Commands
+
+| Command | Purpose |
+|---------|---------|
+| `make` | build |
+| `make run` | clear screen, boot animation, start the server |
+| `make test` | unit + integration tests |
+| `make sanitize` | same suite under ASan + UBSan |
+| `make format-check` | `clang-format` in check mode |
+| `make clean` | remove build artifacts |
+
+## Configuration
+
+| Flag | Env | Default | Notes |
+|------|-----|---------|-------|
+| `--bind IP` | `BIND_IP` | `0.0.0.0` | IPv4, validated at the boundary |
+| `--port PORT` | `PORT` | `8080` | 1-65535 |
+| `--threads N` | `THREADS` | `8` | 1-64 workers |
+| `--db PATH` | `DB_PATH` | `./data/app.db` | parent directories are created |
+| `--api-key KEY` | `API_KEY` | *(unset)* | enables protected mode for writes |
+
+`NO_COLOR`, `COLUMNS`, `CI` and `CONSOLE_NO_ANIMATION` are respected by the
+terminal UI. `LANG`/`LC_ALL` decide between Unicode box drawing and the plain
+ASCII fallback.
 
 ## Architecture
 
@@ -39,14 +116,6 @@ Breaking change vs v0.1: raw TCP echo is now `POST /api/echo`.
 ## Build
 
 Requirements: `gcc` (>=11), `make`, `pthread`, `libsqlite3-dev`. Optional: `clang-format`.
-
-```bash
-make
-make test
-make sanitize
-make format-check
-make clean
-```
 
 ## Run
 
@@ -140,17 +209,6 @@ curl 'localhost:8080/api/notes?limit=10'
 curl localhost:8080/metrics
 kill %1
 ```
-
-## Config / Env
-
-| Flag | Env | Default | Notes |
-|------|-----|---------|-------|
-| `--bind IP` | `BIND_IP` | `0.0.0.0` | IPv4, validated with `inet_pton` |
-| `--port PORT` | `PORT` | `8080` | 1-65535 |
-| `--threads N` | `THREADS` | `8` | 1-64 workers |
-| `--db PATH` | `DB_PATH` | `./data/app.db` | SQLite file, parent dirs created; failure aborts (no fallback) |
-
-Compile-time: backlog 64, queue 128, 5s IO timeout, headers 16KB, body 64KB.
 
 ## Library API
 

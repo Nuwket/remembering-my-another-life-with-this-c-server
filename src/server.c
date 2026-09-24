@@ -248,7 +248,7 @@ static int set_timeouts(int fd) {
 
 static void handle_client(Server *server, int client_fd, const char *peer) {
     if (set_timeouts(client_fd) != 0) {
-        LOG_ERROR_PEER(MODULE, "setsockopt timeout failed", peer);
+        LOG_ERROR_D(MODULE, "setsockopt timeout failed", peer);
         stats_bump(&server->stats.errors);
         stats_bump(&server->stats.http_errors);
         return;
@@ -489,7 +489,7 @@ int server_run(Server *server) {
             return -1;
         }
     }
-    LOG_INFO(MODULE, "serving (thread-pool ready)");
+    LOG_INFO_D(MODULE, "serving", "thread-pool ready");
 
     /* Accept loop with poll timeout so server_stop() is honored promptly. */
     while (!atomic_load_explicit(&server->stop_requested, memory_order_relaxed)) {
@@ -536,6 +536,6 @@ int server_run(Server *server) {
     }
     close(server->listen_fd);
     server->listen_fd = -1;
-    LOG_INFO(MODULE, "stopped cleanly");
+    LOG_INFO_D(MODULE, "stopped", "clean shutdown + WAL checkpoint");
     return 0;
 }

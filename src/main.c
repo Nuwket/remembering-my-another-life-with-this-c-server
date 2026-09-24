@@ -11,11 +11,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
+#include "console.h"
 #include "log.h"
 #include "server.h"
 
 static Server *g_server = NULL;
+static volatile sig_atomic_t g_signalled = 0;
 
 static void print_usage(const char *program) {
     fprintf(stderr,
@@ -29,6 +32,7 @@ static void print_usage(const char *program) {
 
 static void on_signal(int signo) {
     (void)signo;
+    g_signalled = 1;
     /* Only async-signal-safe work here: stop() uses atomics + shutdown(),
      * which is safe enough to wake the accept loop. */
     if (g_server != NULL) {
@@ -193,33 +197,28 @@ int main(int argc, char *argv[]) {
     /* Avoid SIGPIPE killing the process on peer reset; send() uses MSG_NOSIGNAL too. */
     signal(SIGPIPE, SIG_IGN);
 
-    /* Pretty console banner with clickable shortcut links (stdout, flushed). */
-    const char *link_host = strcmp(bind_ip, "0.0.0.0") == 0 ? "127.0.0.1" : bind_ip;
-    const char *auth_mode = (api_key != NULL && api_key[0] != '\0') ? "protected (X-API-Key)" : "open (no key)";
-    printf("\n"
-           "  ==============================================================\n"
-           "   C API Server v%s running\n"
-           "  --------------------------------------------------------------\n"
-           "   App:      http://%s:%u/\n"
-           "   Health:   http://%s:%u/health\n"
-           "   Metrics:  http://%s:%u/metrics\n"
-           "   KV:       http://%s:%u/api/kv?limit=50\n"
-           "   Notes:    http://%s:%u/api/notes?limit=50\n"
-           "  --------------------------------------------------------------\n"
-           "   bind=%s threads=%d db=%s\n"
-           "   Auth: %s\n"
-           "   Stop: Ctrl-C\n"
-           "  ==============================================================\n\n",
-           SERVER_VERSION, link_host, (unsigned)port, link_host, (unsigned)port, link_host, (unsigned)port,
-           link_host, (unsigned)port, link_host, (unsigned)port, bind_ip, threads, db_path, auth_mode);
-    fflush(stdout);
+    /* Boot animation, then the reactor screen. Both degrade on non-TTY. */
+    console_print_boot();
+
+    ConsoleInfo console = {
+        .bind_ip = bind_ip,
+        .link_host = strcmp(bind_ip, "0.0.0.0") == 0 ? "127.0.0.1" : bind_ip,
+        .db_path = db_path,
+        .version = SERVER_VERSION,
+        .port = port,
+        .workers = threads,
+        .auth_protected = api_key != NULL && api_key[0] != '\0',
+    };
+    console_print_banner(&console);
 
     char startup[256];
-    snprintf(startup, sizeof(startup), "listening (bind=%s port=%u threads=%d db=%s)", bind_ip, (unsigned)port,
-             threads, db_path);
-    LOG_INFO("main", startup);
+    snprintf(startup, sizeof(startup), "bind=%s port=%u workers=%d db=%s", bind_ip, (unsigned)port, threads, db_path);
+    LOG_INFO_D("main", "core online", startup);
 
     int result = server_run(server);
+    if (g_signalled) {
+        console_print_shutdown();
+    }
     server_destroy(server);
     g_server = NULL;
     return result == 0 ? 0 : 1;
