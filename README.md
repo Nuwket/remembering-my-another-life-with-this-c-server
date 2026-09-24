@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/assets/trinity-fireball-1945-amber.jpg" alt="Trinity test fireball, 1945 (amber duotone)" width="620">
+<img src="docs/assets/nuclear-bomb-science.jpg" alt="Nuclear test observance, science archive" width="620">
 
 # Nuclear C API Server
 
@@ -14,8 +14,8 @@
 make run
 ```
 
-<small>Trinity test fireball, 16&nbsp;ms after detonation — Berlyn Brixner / LANL,
-public domain (<a href="docs/assets/CREDITS.md">credits</a>).</small>
+<small>Hero image: Getty Images / Wired archive
+(<a href="docs/assets/CREDITS.md">credits</a>).</small>
 
 </div>
 

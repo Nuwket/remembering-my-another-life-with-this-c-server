@@ -1,16 +1,12 @@
 # Asset credits
 
-## trinity-fireball-1945.jpg
+## nuclear-bomb-science.jpg
 
-- Work: "Trinity Test Fireball 16 ms"
-- Photographer: Berlyn Brixner
-- Source: Los Alamos National Laboratory / Wikimedia Commons
-  https://upload.wikimedia.org/wikipedia/commons/7/78/Trinity_Test_Fireball_16ms.jpg
-- License: public domain — photograph taken by an officer or employee of the
-  United States Government as part of official duties (17 U.S.C. § 105).
-
-## trinity-fireball-1945-amber.jpg
-
-- Derivative of the photograph above (black/amber duotone).
-- Produced by `scripts/duotone.py`.
-- Same license status as the source (public domain).
+- Source URL (as fetched):
+  https://media.wired.com/photos/63d0228bacd6369b3b902f3d/3:2/w_2560%2Cc_limit/Nuclearbomb_Science_GettyImages-dv1282015.jpg
+- Original filename in the Wired CDN: `Nuclearbomb_Science_GettyImages-dv1282015.jpg`
+- Credit: Getty Images, via Wired (photo id `dv1282015`)
+- Dimensions: 2400x1600 JPEG
+- License: copyrighted (Getty Images). Used here as the repository hero image
+  at the repository owner's direction; replace with a licensed or public-domain
+  asset if redistribution rights are required.
