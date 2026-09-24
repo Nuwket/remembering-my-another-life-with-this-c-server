@@ -4,279 +4,405 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
-<meta name="description" content="Interactive lab for the C API Server: save, fetch, delete, notes, auth, errors and performance — all against the real backend.">
-<title>C API Server — Lab</title>
+<meta name="description" content="Interactive lab for the Nuclear C API Server: save, fetch, delete, notes, auth, errors and performance, all against the real backend.">
+<title>Nuclear C API Server — Lab</title>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<div class="wrap">
 
+<div class="shell">
+
+  <!-- ============================ HERO ============================ -->
   <header class="hero">
-    <div style="flex:1">
-      <div class="heroRow">
-        <span id="dot" class="dot" role="status" aria-label="server status"></span>
-        <h1>C API Server — <span data-i18n="labWord">Lab</span></h1>
-      </div>
-      <p class="sub" data-i18n="heroSub">Try the server's features. You don't need to know APIs.</p>
-      <p class="sub" id="healthLine" aria-live="polite">…</p>
+    <div class="hero-id">
+      <h1><span class="rad" aria-hidden="true">&#9762;</span> Nuclear API Lab</h1>
+      <p class="tagline" data-i18n="heroTag">Click through the server's real capabilities. No API knowledge required.</p>
+      <p class="hero-status">
+        <span class="beacon" id="beacon" data-state="idle" role="status" aria-live="polite"></span>
+        <span id="healthLine">&mdash;</span>
+      </p>
     </div>
-    <div class="lang" id="langBtns" role="group" aria-label="language">
-      <button data-lang="en" aria-label="English">EN</button>
-      <button data-lang="pt" aria-label="Português">PT</button>
-      <button data-lang="ru" aria-label="Русский">RU</button>
+    <div class="switch" id="langSwitch" role="group" aria-label="language">
+      <button data-lang="en" aria-pressed="true">EN</button>
+      <button data-lang="pt" aria-pressed="false">PT</button>
+      <button data-lang="ru" aria-pressed="false">RU</button>
     </div>
   </header>
 
-  <div class="grid" role="region" aria-label="metrics">
-    <div class="card"><div class="k" data-i18n="mReq">requests</div><div class="v" id="mReq">–</div></div>
-    <div class="card"><div class="k" data-i18n="mErr">errors</div><div class="v" id="mErr">–</div></div>
-    <div class="card"><div class="k" data-i18n="mKv">kv keys</div><div class="v" id="mKv">–</div></div>
-    <div class="card"><div class="k" data-i18n="mNotes">notes</div><div class="v" id="mNotes">–</div></div>
-    <div class="card"><div class="k" data-i18n="mConn">connections</div><div class="v" id="mConn">–</div></div>
+  <!-- ============================ STATS ============================ -->
+  <dl class="stats" aria-label="server metrics">
+    <div class="stat"><dt data-i18n="sReq">requests</dt><dd id="mReq">&mdash;</dd></div>
+    <div class="stat"><dt data-i18n="sErr">errors</dt><dd id="mErr">&mdash;</dd></div>
+    <div class="stat"><dt data-i18n="sKv">kv keys</dt><dd id="mKv">&mdash;</dd></div>
+    <div class="stat"><dt data-i18n="sNotes">notes</dt><dd id="mNotes">&mdash;</dd></div>
+    <div class="stat"><dt data-i18n="sConn">connections</dt><dd id="mConn">&mdash;</dd></div>
+  </dl>
+
+  <!-- ============================ LAB ============================ -->
+  <div class="grid-2">
+
+    <!-- KV -->
+    <section class="card" aria-labelledby="kvTitle">
+      <div class="card-head">
+        <span class="card-icon" aria-hidden="true">&#128190;</span>
+        <div>
+          <h2 id="kvTitle" data-i18n="kvTitle">Save a value</h2>
+          <p data-i18n="kvSub">Key&ndash;value store, backed by SQLite</p>
+        </div>
+        <span class="spacer"></span>
+        <span class="method" data-m="PUT">PUT</span>
+      </div>
+      <div class="card-body">
+        <p class="card-note" data-i18n="kvNote">Give the server a name and a value. It writes the row and tells you what it did.</p>
+
+        <div class="fields">
+          <label class="field">
+            <span data-i18n="lKey">key</span>
+            <input id="kvKey" value="meu_nome" data-tip="key" autocomplete="off" spellcheck="false">
+          </label>
+          <label class="field">
+            <span data-i18n="lValue">value</span>
+            <input id="kvValue" value="Nuwket" data-tip="value" autocomplete="off">
+          </label>
+        </div>
+
+        <div class="actions">
+          <button class="btn btn-primary" data-action="kvSave"><span class="spinner"></span><span data-i18n="bSave">Save</span></button>
+          <button class="btn btn-ghost" data-action="kvFetch"><span class="spinner"></span><span data-i18n="bFetch">Fetch</span></button>
+          <button class="btn btn-danger" data-action="kvDelete"><span class="spinner"></span><span data-i18n="bDelete">Delete</span></button>
+        </div>
+
+        <p class="readout" id="kvOut" aria-live="polite" data-i18n="idle">ready</p>
+
+        <details class="disclose">
+          <summary data-i18n="howSave">How does it work?</summary>
+          <div class="disclose-body" data-how="save"></div>
+        </details>
+        <details class="disclose">
+          <summary data-i18n="cmpSave">How would other languages do this?</summary>
+          <div class="disclose-body" data-fn="save"></div>
+        </details>
+      </div>
+    </section>
+
+    <!-- NOTES -->
+    <section class="card" aria-labelledby="noteTitle">
+      <div class="card-head">
+        <span class="card-icon" aria-hidden="true">&#128221;</span>
+        <div>
+          <h2 id="noteTitle" data-i18n="noteTitle">Notes</h2>
+          <p data-i18n="noteSub">Numbered rows in the same database</p>
+        </div>
+        <span class="spacer"></span>
+        <span class="method" data-m="POST">POST</span>
+      </div>
+      <div class="card-body">
+        <p class="card-note" data-i18n="noteNote">Create a note, then edit or delete it from the list. Ids are assigned by the server.</p>
+
+        <div class="fields">
+          <label class="field">
+            <span data-i18n="lTitle">title</span>
+            <input id="noteTitleValue" value="Minha primeira nota" data-tip="title" autocomplete="off">
+          </label>
+        </div>
+        <label class="field">
+          <span data-i18n="lText">text</span>
+          <textarea id="noteBodyValue" data-tip="body" rows="2">Minha primeira nota no C Server</textarea>
+        </label>
+
+        <div class="actions" style="margin-top:12px">
+          <button class="btn btn-primary" data-note="noteCreate"><span class="spinner"></span><span data-i18n="bCreate">Create note</span></button>
+          <button class="btn btn-ghost" data-note="noteList"><span class="spinner"></span><span data-i18n="bList">Refresh list</span></button>
+        </div>
+
+        <p class="readout" id="noteOut" aria-live="polite" data-i18n="idle">ready</p>
+        <div class="items" id="noteList"></div>
+
+        <details class="disclose">
+          <summary data-i18n="howNote">How does it work?</summary>
+          <div class="disclose-body" data-how="note"></div>
+        </details>
+        <details class="disclose">
+          <summary data-i18n="cmpNote">How would other languages do this?</summary>
+          <div class="disclose-body" data-fn="note"></div>
+        </details>
+      </div>
+    </section>
+
+    <!-- VAULT -->
+    <section class="card" aria-labelledby="authTitle">
+      <div class="card-head">
+        <span class="card-icon" aria-hidden="true">&#128274;</span>
+        <div>
+          <h2 id="authTitle" data-i18n="authTitle">Vault</h2>
+          <p data-i18n="authSub">Optional password for write operations</p>
+        </div>
+        <span class="spacer"></span>
+        <span class="badge" id="authBadge" data-tone="ok">&mdash;</span>
+      </div>
+      <div class="card-body">
+        <p class="card-note" data-i18n="authNote">When the server runs with <code>--api-key</code>, writes need a matching <code>X-API-Key</code>. Reads stay open.</p>
+
+        <div class="notice" id="authNotice" hidden></div>
+
+        <div class="fields">
+          <label class="field">
+            <span data-i18n="lPass">demo password</span>
+            <input id="authToken" type="password" value="demo" data-tip="tok" autocomplete="off">
+          </label>
+        </div>
+
+        <div class="actions">
+          <button class="btn btn-primary" data-action="authGood"><span class="spinner"></span><span data-i18n="bAuthGood">Right password</span></button>
+          <button class="btn btn-ghost" data-action="authWrong"><span class="spinner"></span><span data-i18n="bAuthWrong">Wrong password</span></button>
+          <button class="btn btn-ghost" data-action="authNone"><span class="spinner"></span><span data-i18n="bAuthNone">No password</span></button>
+          <button class="btn btn-ghost" data-action="authForget" data-i18n="bForget">Forget</button>
+        </div>
+
+        <p class="readout" id="authOut" aria-live="polite" data-i18n="idle">ready</p>
+
+        <details class="disclose">
+          <summary data-i18n="howAuth">How does it work?</summary>
+          <div class="disclose-body" data-how="auth"></div>
+        </details>
+        <details class="disclose">
+          <summary data-i18n="cmpAuth">How would other languages do this?</summary>
+          <div class="disclose-body" data-fn="auth"></div>
+        </details>
+      </div>
+    </section>
+
+    <!-- ECHO -->
+    <section class="card" aria-labelledby="echoTitle">
+      <div class="card-head">
+        <span class="card-icon" aria-hidden="true">&#128225;</span>
+        <div>
+          <h2 id="echoTitle" data-i18n="echoTitle">Send a message</h2>
+          <p data-i18n="echoSub">The server returns exactly what it received</p>
+        </div>
+        <span class="spacer"></span>
+        <span class="method" data-m="POST">POST</span>
+      </div>
+      <div class="card-body">
+        <p class="card-note" data-i18n="echoNote">Type anything. The value is JSON-encoded, sent, parsed back and shown again on the other side.</p>
+
+        <label class="field">
+          <span data-i18n="lMessage">message</span>
+          <input id="echoInput" value="Ol&#225; servidor!" autocomplete="off">
+        </label>
+
+        <div class="actions" style="margin-top:12px">
+          <button class="btn btn-primary" data-action="echoSend"><span class="spinner"></span><span data-i18n="bSend">Send</span></button>
+        </div>
+
+        <p class="readout" id="echoOut" aria-live="polite" data-i18n="idle">ready</p>
+
+        <details class="disclose">
+          <summary data-i18n="howEcho">How does it work?</summary>
+          <div class="disclose-body" data-how="echo"></div>
+        </details>
+        <details class="disclose">
+          <summary data-i18n="cmpEcho">How would other languages do this?</summary>
+          <div class="disclose-body" data-fn="echo"></div>
+        </details>
+      </div>
+    </section>
+
   </div>
 
-  <!-- 💾 save / fetch / delete -->
-  <section class="panel" aria-labelledby="kvH">
-    <h2 id="kvH">💾 <span data-i18n="saveTitle">Save a value</span></h2>
-    <p class="hint" data-i18n="saveHint">The server can store information. Give it a name and a value, then save.</p>
-    <div class="row">
-      <div class="field">
-        <label class="f" for="kvKey" data-i18n="nameL">name</label>
-        <input id="kvKey" value="meu_nome" data-tip="key" autocomplete="off">
-      </div>
-      <div class="field">
-        <label class="f" for="kvVal" data-i18n="valL">value</label>
-        <input id="kvVal" value="Nuwket" data-tip="value" autocomplete="off">
+  <!-- ============================ ERRORS ============================ -->
+  <section class="card" style="margin-top:20px" aria-labelledby="errTitle">
+    <div class="card-head">
+      <span class="card-icon" aria-hidden="true">&#9888;</span>
+      <div>
+        <h2 id="errTitle" data-i18n="errTitle">Make the server complain</h2>
+        <p data-i18n="errSub">Real rejections with real status codes</p>
       </div>
     </div>
-    <div class="row">
-      <button class="big ok" data-action="kvSave" data-i18n="saveBtn">🟢 SAVE</button>
-      <button class="big go" data-action="kvFetch" data-i18n="fetchBtn">📦 FETCH IT</button>
-      <button class="big bad" data-action="kvDelete" data-i18n="delBtn">🗑️ DELETE IT</button>
-    </div>
-    <div class="result" id="kvResult" aria-live="polite">…</div>
-    <div class="techline" id="kvTech"></div>
-    <details class="how">
-      <summary data-i18n="howQ">? How does it work?</summary>
-      <div class="steps" data-how="save"></div>
-    </details>
-    <details class="cmp"><summary data-i18n="cmpQ">🔎 How would other languages do this?</summary><div data-fn="save"></div></details>
-    <details class="cmp"><summary data-i18n="cmpQget">🔎 …and to FETCH?</summary><div data-fn="get"></div></details>
-    <details class="cmp"><summary data-i18n="cmpQdel">🔎 …and to DELETE?</summary><div data-fn="del"></div></details>
-  </section>
+    <div class="card-body">
+      <p class="card-note" data-i18n="errNote">Not every request has to succeed. Each button provokes a specific failure so you can see how validation and error mapping behave.</p>
 
-  <!-- 📝 notes -->
-  <section class="panel" aria-labelledby="nH">
-    <h2 id="nH">📝 <span data-i18n="notesTitle">Notes</span></h2>
-    <p class="hint" data-i18n="notesHint">The server also keeps small numbered notes.</p>
-    <div class="row">
-      <div class="field">
-        <label class="f" for="nTitle" data-i18n="titleL">title</label>
-        <input id="nTitle" value="Minha primeira nota" data-tip="title" autocomplete="off">
+      <div class="gallery">
+        <div class="probe">
+          <strong data-i18n="pGoneT">Missing key</strong>
+          <span data-i18n="pGoneD">Ask for a value that was never stored.</span>
+          <button class="btn btn-ghost" data-err="errMissing"><span class="spinner"></span><span data-i18n="try">Test</span></button>
+        </div>
+        <div class="probe">
+          <strong data-i18n="pIdT">Invalid id</strong>
+          <span data-i18n="pIdD">Note ids must be positive integers.</span>
+          <button class="btn btn-ghost" data-err="errBadId"><span class="spinner"></span><span data-i18n="try">Test</span></button>
+        </div>
+        <div class="probe">
+          <strong data-i18n="pMethodT">Wrong method</strong>
+          <span data-i18n="pMethodD">POST is not allowed on /health.</span>
+          <button class="btn btn-ghost" data-err="errMethod"><span class="spinner"></span><span data-i18n="try">Test</span></button>
+        </div>
+        <div class="probe">
+          <strong data-i18n="pDataT">Invalid payload</strong>
+          <span data-i18n="pDataD">Send a body without the required field.</span>
+          <button class="btn btn-ghost" data-err="errPayload"><span class="spinner"></span><span data-i18n="try">Test</span></button>
+        </div>
+        <div class="probe">
+          <strong data-i18n="pBigT">Oversized body</strong>
+          <span data-i18n="pBigD">Break the 64&nbsp;KB request limit.</span>
+          <button class="btn btn-ghost" data-err="errTooBig"><span class="spinner"></span><span data-i18n="try">Test</span></button>
+        </div>
+        <div class="probe">
+          <strong data-i18n="pRouteT">Unknown route</strong>
+          <span data-i18n="pRouteD">Ask for a path the server does not serve.</span>
+          <button class="btn btn-ghost" data-err="errRoute"><span class="spinner"></span><span data-i18n="try">Test</span></button>
+        </div>
       </div>
-    </div>
-    <div class="row">
-      <div class="field">
-        <label class="f" for="nBody" data-i18n="bodyL">text</label>
-        <textarea id="nBody" data-tip="body">Minha primeira nota no C Server</textarea>
-      </div>
-    </div>
-    <div class="row">
-      <button class="big ok" data-note-action="noteCreate" data-i18n="createNote">🟢 CREATE NOTE</button>
-      <button class="big go" data-note-action="noteList" data-i18n="listNotes">📋 SEE ALL NOTES</button>
-    </div>
-    <div class="result" id="nResult" aria-live="polite">…</div>
-    <div id="notesLive"></div>
-    <div class="techline" id="nTech"></div>
-    <details class="how">
-      <summary data-i18n="howQ">? How does it work?</summary>
-      <div class="steps" data-how="notes"></div>
-    </details>
-    <details class="cmp"><summary data-i18n="cmpQ">🔎 How would other languages do this?</summary><div data-fn="note"></div></details>
-  </section>
 
-  <!-- 🔐 vault -->
-  <section class="panel" aria-labelledby="authH">
-    <h2 id="authH">🔐 <span data-i18n="authTitle">Vault</span></h2>
-    <p class="hint" data-i18n="authHint">The server may require a password to allow changes. Let's test.</p>
-    <div class="row">
-      <div class="field">
-        <label class="f" for="apiPass" data-i18n="passL">demo password</label>
-        <input id="apiPass" type="password" value="demo" data-tip="tok" autocomplete="off">
-      </div>
-      <span class="badge open" id="authMode">…</span>
-      <button class="ghost" data-action="forgetPassword" data-i18n="forget">Forget</button>
-    </div>
-    <p class="notice" id="authNotice" hidden></p>
-    <div class="row">
-      <button class="big ok" data-action="authGood" data-i18n="authGood">🟢 ENTER WITH THE RIGHT PASSWORD</button>
-      <button class="big bad" data-action="authWrong" data-i18n="authBad">🔴 TRY THE WRONG PASSWORD</button>
-      <button class="big ghost" data-action="authNone" data-i18n="authNone">⚪ TRY WITH NO PASSWORD</button>
-    </div>
-    <div class="result" id="authResult" aria-live="polite">…</div>
-    <div class="techline" id="authTech"></div>
-    <details class="how">
-      <summary data-i18n="howQ">? How does it work?</summary>
-      <div class="steps" data-how="auth"></div>
-    </details>
-    <details class="cmp"><summary data-i18n="cmpQ">🔎 How would other languages do this?</summary><div data-fn="auth"></div></details>
-  </section>
-
-  <!-- 📡 echo -->
-  <section class="panel" aria-labelledby="eH">
-    <h2 id="eH">📡 <span data-i18n="echoTitle">Send a message</span></h2>
-    <p class="hint" data-i18n="echoHint">The server sends back exactly what it receives. Write something and send it.</p>
-    <div class="row">
-      <div class="field">
-        <label class="f" for="echoIn" data-i18n="msgL">message</label>
-        <input id="echoIn" value="Olá servidor!" autocomplete="off">
-      </div>
-      <button class="big ok" data-action="echoSend" data-i18n="sendBtn">🟢 SEND</button>
-    </div>
-    <div class="result" id="echoResult" aria-live="polite">…</div>
-    <div class="techline" id="echoTech"></div>
-    <details class="how">
-      <summary data-i18n="howQ">? How does it work?</summary>
-      <div class="steps" data-how="echo"></div>
-    </details>
-    <details class="cmp"><summary data-i18n="cmpQ">🔎 How would other languages do this?</summary><div data-fn="echo"></div></details>
-  </section>
-
-  <!-- 💥 error gallery -->
-  <section class="panel" aria-labelledby="errH">
-    <h2 id="errH">💥 <span data-i18n="errTitle">Make the server complain</span></h2>
-    <p class="hint" data-i18n="errHint">Not every request has to work. Click to see how the server handles problems.</p>
-    <div class="errgrid">
-      <div class="errcard">
-        <b data-i18n="eGoneT">🟡 Fetch something missing</b>
-        <p data-i18n="eGoneD">Ask for a value that was never saved.</p>
-        <button class="ghost" data-err="errMissingValue" data-i18n="tryBtn">TEST</button>
-      </div>
-      <div class="errcard">
-        <b data-i18n="eAuthT">🟡 Send a wrong password</b>
-        <p data-i18n="eAuthD">See what happens when authentication fails.</p>
-        <button class="ghost" data-err="errWrongKey" data-i18n="tryBtn">TEST</button>
-      </div>
-      <div class="errcard">
-        <b data-i18n="eDataT">🟡 Send invalid data</b>
-        <p data-i18n="eDataD">Send something the server cannot accept.</p>
-        <button class="ghost" data-err="errMissing" data-i18n="tryBtn">TEST</button>
-      </div>
-      <div class="errcard">
-        <b data-i18n="eOpT">🟡 Use the wrong operation</b>
-        <p data-i18n="eOpD">Try something this function does not allow.</p>
-        <button class="ghost" data-err="errWrongMethod" data-i18n="tryBtn">TEST</button>
-      </div>
-      <div class="errcard">
-        <b data-i18n="eBigT">🟡 Send a giant value</b>
-        <p data-i18n="eBigD">Break the 64KB limit on purpose.</p>
-        <button class="ghost" data-err="errTooBig" data-i18n="tryBtn">TEST</button>
-      </div>
-      <div class="errcard">
-        <b data-i18n="eRouteT">🟡 Ask an unknown address</b>
-        <p data-i18n="eRouteD">Call a route the server never heard of.</p>
-        <button class="ghost" data-err="errUnknownRoute" data-i18n="tryBtn">TEST</button>
-      </div>
-    </div>
-    <div class="result" id="errResult" aria-live="polite">…</div>
-    <div class="techline" id="errTech"></div>
-  </section>
-
-  <!-- ⚡ performance -->
-  <section class="panel" aria-labelledby="perfH">
-    <h2 id="perfH">⚡ <span data-i18n="perfTitle">How fast does the server answer?</span></h2>
-    <p class="hint" data-i18n="perfHint">The test sends real requests and times them. Nothing is faked.</p>
-    <div class="row">
-      <button class="ghost pill" data-perf="1" aria-pressed="false">1</button>
-      <button class="ghost pill" data-perf="10" aria-pressed="true">10</button>
-      <button class="ghost pill" data-perf="100" aria-pressed="false">100</button>
-      <button class="big ok" data-action="runPerf" data-i18n="runTest">🟢 RUN TEST</button>
-    </div>
-    <div class="result" id="perfResult" aria-live="polite">…</div>
-    <div class="techline" id="perfTech"></div>
-    <details class="how">
-      <summary data-i18n="howQ">? How does it work?</summary>
-      <div class="steps" data-how="perf"></div>
-    </details>
-  </section>
-
-  <!-- 🌎 languages -->
-  <section class="panel" aria-labelledby="langH">
-    <h2 id="langH">🌎 <span data-i18n="langTitle">The same task, five languages</span></h2>
-    <p class="hint" data-i18n="langHint">Everyone solves the same problem. What changes is how each language expresses it.</p>
-    <div class="row" id="langBtns2" role="group" aria-label="implementation language">
-      <button class="ghost" data-impl="c">C</button>
-      <button class="ghost" data-impl="python">Python</button>
-      <button class="ghost" data-impl="go">Go</button>
-      <button class="ghost" data-impl="rust">Rust</button>
-      <button class="ghost" data-impl="node">Node.js</button>
-    </div>
-    <p class="langnote" id="langNote" aria-live="polite">…</p>
-    <div class="table-scroll">
-      <table class="sess matrix">
-        <thead>
-          <tr><th data-i18n="colPiece">piece</th><th>C</th><th>Python</th><th>Go</th><th>Rust</th><th>Node.js</th></tr>
-        </thead>
-        <tbody id="pieceBody"></tbody>
-      </table>
+      <p class="readout" id="errOut" aria-live="polite" data-i18n="idle">ready</p>
     </div>
   </section>
 
-  <nav class="panel links" aria-label="shortcuts">
-    <h2 data-i18n="linksTitle">Shortcuts</h2>
-    <a href="/health" target="_blank" rel="noopener">/health</a>
-    <a href="/metrics" target="_blank" rel="noopener">/metrics</a>
-    <a href="/api/kv?limit=50" target="_blank" rel="noopener">/api/kv</a>
-    <a href="/api/notes?limit=50" target="_blank" rel="noopener">/api/notes</a>
-  </nav>
+  <!-- ============================ PERF ============================ -->
+  <section class="card" style="margin-top:20px" aria-labelledby="perfTitle">
+    <div class="card-head">
+      <span class="card-icon" aria-hidden="true">&#9889;</span>
+      <div>
+        <h2 id="perfTitle" data-i18n="perfTitle">How fast does it answer?</h2>
+        <p data-i18n="perfSub">Real concurrent requests, timed in the browser</p>
+      </div>
+    </div>
+    <div class="card-body">
+      <p class="card-note" data-i18n="perfNote">The runner fires N simultaneous <code>GET /health</code> calls and reports wall time and the average per request. Nothing is simulated.</p>
 
-  <!-- 🛠 tech mode -->
-  <details class="panel tech">
-    <summary>🛠️ <span data-i18n="techTitle">Tech mode — see what happened underneath</span></summary>
-    <p class="hint" data-i18n="techHint">Method, URL, headers, body, status, response, time and curl for every call.</p>
-    <div class="row">
-      <div class="field" style="max-width:150px;flex:none">
-        <label class="f" for="cMethod">method</label>
-        <select id="cMethod">
-          <option>GET</option><option>POST</option><option>PUT</option><option>DELETE</option>
-        </select>
+      <div class="actions">
+        <div class="segmented" id="perfPicker" role="group" aria-label="request count">
+          <button data-perf="1" aria-pressed="false">1</button>
+          <button data-perf="10" aria-pressed="true">10</button>
+          <button data-perf="100" aria-pressed="false">100</button>
+        </div>
+        <button class="btn btn-primary" data-action="perfRun"><span class="spinner"></span><span data-i18n="bRunPerf">Run test</span></button>
       </div>
-      <div class="field">
-        <label class="f" for="cPath" data-i18n="pathL">path</label>
-        <input id="cPath" value="/health" data-tip="path" autocomplete="off">
-      </div>
-      <button class="go big" data-action="composerRun" data-i18n="execute">Execute</button>
-      <button class="ghost" data-action="copyCurl">curl ⧉</button>
-      <button class="ghost" data-action="clearHistory" data-i18n="clear">Clear</button>
+
+      <p class="readout" id="perfOut" aria-live="polite" data-i18n="idle">ready</p>
+
+      <details class="disclose">
+        <summary data-i18n="howPerf">How does it work?</summary>
+        <div class="disclose-body" data-how="perf"></div>
+      </details>
     </div>
-    <div class="row">
-      <div class="field">
-        <label class="f" for="cHeaders" data-i18n="headersL">headers (one per line)</label>
-        <textarea id="cHeaders" rows="2" data-tip="hdrs">Content-Type: application/json</textarea>
-      </div>
-      <div class="field">
-        <label class="f" for="cBody" data-i18n="bodyL2">body (raw)</label>
-        <textarea id="cBody" rows="2" data-tip="rawbody"></textarea>
+  </section>
+
+  <!-- ============================ LANGUAGES ============================ -->
+  <section class="card" style="margin-top:20px" aria-labelledby="langTitle">
+    <div class="card-head">
+      <span class="card-icon" aria-hidden="true">&#127760;</span>
+      <div>
+        <h2 id="langTitle" data-i18n="langTitle">The same task, five languages</h2>
+        <p data-i18n="langSub">Functionally equivalent, stylistically different</p>
       </div>
     </div>
-    <div class="explain" aria-live="polite"><b>auto-explain (EN):</b> <span id="devExplainTxt">make a request…</span></div>
-    <pre class="out" id="devLast" aria-live="polite">—</pre>
-    <pre class="out" id="devHist" aria-label="request history">—</pre>
-    <div class="table-scroll">
-      <table class="sess">
-        <thead>
-          <tr>
-            <th data-i18n="colRoute">endpoint</th><th>2xx</th><th>4xx</th><th>5xx</th><th data-i18n="colTotal">total</th>
-          </tr>
-        </thead>
-        <tbody id="sessBody"><tr><td colspan="5">—</td></tr></tbody>
-      </table>
+    <div class="card-body">
+      <p class="card-note" data-i18n="langNote">Pick a language to see the descriptive notes and highlight its column below. The C snippets are real excerpts from this server; the others are clearly labelled examples that are not executed here.</p>
+
+      <div class="tabs" id="implTabs" role="group" aria-label="implementation language">
+        <button data-impl="c" aria-pressed="true">C</button>
+        <button data-impl="python" aria-pressed="false">Python</button>
+        <button data-impl="go" aria-pressed="false">Go</button>
+        <button data-impl="rust" aria-pressed="false">Rust</button>
+        <button data-impl="node" aria-pressed="false">Node.js</button>
+      </div>
+
+      <p class="lang-note" id="implNote" aria-live="polite">&mdash;</p>
+
+      <div class="table-wrap" style="margin-top:14px">
+        <table class="matrix">
+          <thead>
+            <tr>
+              <th data-i18n="mPiece">piece</th>
+              <th>C</th><th>Python</th><th>Go</th><th>Rust</th><th>Node.js</th>
+            </tr>
+          </thead>
+          <tbody id="matrixBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ TECH DRAWER ============================ -->
+  <details class="drawer">
+    <summary>
+      <span class="card-icon" aria-hidden="true">&#128295;</span>
+      <div>
+        <h2 data-i18n="drawerTitle">Tech mode</h2>
+        <p data-i18n="drawerSub">Inspector, history, curl and a raw composer</p>
+      </div>
+      <span class="spacer"></span>
+    </summary>
+    <div class="drawer-body">
+
+      <div class="explain">
+        <b>auto-explain &middot; english</b>
+        <span id="explainText" aria-live="polite">Run a request to see a plain-English diagnosis.</span>
+      </div>
+
+      <div class="fields" style="margin-top:16px">
+        <label class="field" style="max-width:150px">
+          <span>method</span>
+          <select id="rawMethod">
+            <option>GET</option><option>POST</option><option>PUT</option><option>DELETE</option>
+          </select>
+        </label>
+        <label class="field">
+          <span data-i18n="lPath">path</span>
+          <input id="rawPath" value="/health" data-tip="path" autocomplete="off" spellcheck="false">
+        </label>
+      </div>
+
+      <div class="fields">
+        <label class="field">
+          <span data-i18n="lHeaders">headers</span>
+          <textarea id="rawHeaders" rows="3" data-tip="hdrs" spellcheck="false">Content-Type: application/json</textarea>
+        </label>
+        <label class="field">
+          <span data-i18n="lRawBody">body</span>
+          <textarea id="rawBody" rows="3" data-tip="rawbody" spellcheck="false" placeholder="{ }"></textarea>
+        </label>
+      </div>
+
+      <div class="actions">
+        <button class="btn btn-primary" data-action="rawRun"><span class="spinner"></span><span data-i18n="bExecute">Execute</span></button>
+        <button class="btn btn-ghost" data-action="copyCurl" data-i18n="bCopyCurl">Copy as curl</button>
+        <button class="btn btn-ghost" data-action="clearStream" data-i18n="bClear">Clear</button>
+      </div>
+
+      <pre class="stream" id="lastCall" aria-live="polite"></pre>
+      <pre class="stream" id="history" aria-label="request history"></pre>
+
+      <div class="table-wrap" style="margin-top:16px">
+        <table class="matrix">
+          <thead>
+            <tr>
+              <th data-i18n="mEndpoint">endpoint</th>
+              <th>2xx</th><th>4xx</th><th>5xx</th><th data-i18n="mTotal">total</th>
+            </tr>
+          </thead>
+          <tbody id="sessionBody"></tbody>
+        </table>
+      </div>
     </div>
   </details>
 
-  <footer data-i18n="footer">C API Server — everything here hits the real C backend. No mocks.</footer>
+  <!-- ============================ FOOTER ============================ -->
+  <footer class="foot">
+    <p data-i18n="footNote">Every button on this page calls the real C backend. No mocks.</p>
+    <nav class="foot-links" aria-label="raw endpoints">
+      <a href="/health" target="_blank" rel="noopener">/health</a>
+      <a href="/metrics" target="_blank" rel="noopener">/metrics</a>
+      <a href="/api/kv?limit=50" target="_blank" rel="noopener">/api/kv</a>
+      <a href="/api/notes?limit=50" target="_blank" rel="noopener">/api/notes</a>
+    </nav>
+  </footer>
+
 </div>
-<div class="toast" id="toast" aria-live="assertive"></div>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
 <script type="module" src="lab.js"></script>
 </body>
 </html>
