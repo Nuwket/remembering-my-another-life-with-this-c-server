@@ -5,7 +5,19 @@
 
 export const I18N = {
   en: {
-    heroTag: "Click through the server's real capabilities. No API knowledge required.",
+    navCore: "Overview", navStorage: "Storage", navSecurity: "Security",
+    navHttp: "HTTP", navFailure: "Failure", navPerf: "Perf", navTech: "Tech",
+    heroKicker: "Live backend · core 01",
+    heroTag: "A hands-on laboratory for an HTTP server engineered in C. Every control hits the real process — no mocks, no sample data.",
+    heroCta: "Open the lab", heroTech: "Tech mode",
+    sysStatus: "System status", storageLabel: "Storage",
+    chStorage: "Storage lab", chVault: "Security / vault",
+    chFailure: "Failure lab", chPerf: "Performance lab",
+    chLang: "Language lab", chTech: "Advanced",
+    outLabel: "Output", lastCallLabel: "Last call", historyLabel: "History",
+    howTag: "How it works", cmpTag: "Other languages",
+    flowMsg: "Message", flowReq: "HTTP request", flowSrv: "C server", flowRes: "Response",
+    busyWrite: "WRITING TO SQLITE…", busyReq: "EXECUTING REQUEST…", busyBench: "RUNNING BENCHMARK…",
     online: "online", offline: "unreachable", idle: "ready",
     sReq: "requests", sErr: "errors", sKv: "kv keys", sNotes: "notes", sConn: "connections",
 
@@ -76,7 +88,19 @@ export const I18N = {
   },
 
   pt: {
-    heroTag: "Clique pelas capacidades reais do servidor. Não precisa saber API.",
+    navCore: "Visão geral", navStorage: "Armazenamento", navSecurity: "Segurança",
+    navHttp: "HTTP", navFailure: "Falhas", navPerf: "Perf", navTech: "Tech",
+    heroKicker: "Backend ao vivo · núcleo 01",
+    heroTag: "Um laboratório prático para um servidor HTTP escrito em C. Cada controle atinge o processo real — sem mocks, sem dados de exemplo.",
+    heroCta: "Abrir o laboratório", heroTech: "Modo técnico",
+    sysStatus: "Status do sistema", storageLabel: "Armazenamento",
+    chStorage: "Laboratório de storage", chVault: "Segurança / cofre",
+    chFailure: "Laboratório de falhas", chPerf: "Laboratório de performance",
+    chLang: "Laboratório de linguagens", chTech: "Avançado",
+    outLabel: "Saída", lastCallLabel: "Última chamada", historyLabel: "Histórico",
+    howTag: "Como funciona", cmpTag: "Outras linguagens",
+    flowMsg: "Mensagem", flowReq: "Requisição HTTP", flowSrv: "Servidor C", flowRes: "Resposta",
+    busyWrite: "GRAVANDO NO SQLITE…", busyReq: "EXECUTANDO REQUISIÇÃO…", busyBench: "RODANDO BENCHMARK…",
     online: "online", offline: "sem conexão", idle: "pronto",
     sReq: "requisições", sErr: "erros", sKv: "chaves kv", sNotes: "notas", sConn: "conexões",
 
@@ -146,7 +170,19 @@ export const I18N = {
   },
 
   ru: {
-    heroTag: "Пройдитесь по реальным возможностям сервера. Знать API не нужно.",
+    navCore: "Обзор", navStorage: "Хранилище", navSecurity: "Безопасность",
+    navHttp: "HTTP", navFailure: "Отказы", navPerf: "Перф", navTech: "Tech",
+    heroKicker: "Живой бэкенд · ядро 01",
+    heroTag: "Практическая лаборатория для HTTP-сервера на C. Каждая кнопка бьёт в реальный процесс — без моков и демо-данных.",
+    heroCta: "Открыть лабораторию", heroTech: "Техрежим",
+    sysStatus: "Состояние системы", storageLabel: "Хранилище",
+    chStorage: "Лаборатория хранилища", chVault: "Безопасность / сейф",
+    chFailure: "Лаборатория отказов", chPerf: "Лаборатория производительности",
+    chLang: "Лаборатория языков", chTech: "Расширенное",
+    outLabel: "Вывод", lastCallLabel: "Последний вызов", historyLabel: "История",
+    howTag: "Как это работает", cmpTag: "Другие языки",
+    flowMsg: "Сообщение", flowReq: "HTTP-запрос", flowSrv: "C-сервер", flowRes: "Ответ",
+    busyWrite: "ЗАПИСЬ В SQLITE…", busyReq: "ВЫПОЛНЕНИЕ ЗАПРОСА…", busyBench: "ЗАМЕР БЕНЧМАРКА…",
     online: "в сети", offline: "нет связи", idle: "готово",
     sReq: "запросы", sErr: "ошибки", sKv: "ключи kv", sNotes: "заметки", sConn: "соединения",
 

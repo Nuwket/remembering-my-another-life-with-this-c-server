@@ -18,7 +18,6 @@ let protectedMode = false;
 let lastCall = null;
 let currentImpl = "c";
 let perfCount = 10;
-let runId = 0;
 
 const history = [];
 const session = new Map();
@@ -112,6 +111,12 @@ function idle(id) {
   el.dataset.state = "idle";
 }
 
+function begin(id, message) {
+  const el = cache(id);
+  el.textContent = message;
+  el.dataset.state = "busy";
+}
+
 /* ------------------------------------------------------------------ *
  * Tracing
  * ------------------------------------------------------------------ */
@@ -195,6 +200,7 @@ function kvFields() {
 async function kvSave() {
   const { key, value } = kvFields();
   const path = "/api/kv/" + encodeURIComponent(key);
+  begin("kvOut", I18N[lang].busyWrite);
   const result = await callJson(ctx, "PUT", path, { value }, { label: "PUT /api/kv/:key" });
   const ok = result.status >= 200 && result.status < 300;
   paint("kvOut", ok ? MSGS[lang].saved(key, value) : MSGS[lang].badRequest, ok, line("PUT", path, result));
@@ -204,6 +210,7 @@ async function kvSave() {
 async function kvFetch() {
   const { key } = kvFields();
   const path = "/api/kv/" + encodeURIComponent(key);
+  begin("kvOut", I18N[lang].busyReq);
   const result = await callJson(ctx, "GET", path, undefined, { label: "GET /api/kv/:key" });
   let human = MSGS[lang].notFound();
   if (result.status === 200) {
@@ -217,6 +224,7 @@ async function kvDelete() {
   const { key } = kvFields();
   if (!window.confirm(I18N[lang].confirmKv + " " + key + "?")) return;
   const path = "/api/kv/" + encodeURIComponent(key);
+  begin("kvOut", I18N[lang].busyWrite);
   const result = await callJson(ctx, "DELETE", path, undefined, { label: "DELETE /api/kv/:key" });
   const ok = result.status === 204;
   paint("kvOut", ok ? MSGS[lang].deleted() : MSGS[lang].notFound(), ok, line("DELETE", path, result));
@@ -290,6 +298,7 @@ function renderNotes(items) {
 
 async function noteCreate() {
   const { title, body } = noteFields();
+  begin("noteOut", I18N[lang].busyWrite);
   const result = await callJson(ctx, "POST", "/api/notes", { title, body }, { label: "POST /api/notes" });
   let human = MSGS[lang].badRequest();
   if (result.status === 201) {
@@ -303,6 +312,7 @@ async function noteCreate() {
 
 async function noteList() {
   const path = "/api/notes?limit=50";
+  begin("noteOut", I18N[lang].busyReq);
   const result = await callJson(ctx, "GET", path, undefined, { label: "GET /api/notes" });
   if (result.status !== 200) {
     paint("noteOut", MSGS[lang].badRequest(), false, line("GET", path, result));
@@ -323,6 +333,7 @@ async function noteList() {
 async function noteUpdate(id) {
   const { title, body } = noteFields();
   const path = "/api/notes/" + id;
+  begin("noteOut", I18N[lang].busyWrite);
   const result = await callJson(ctx, "PUT", path, { title, body }, { label: "PUT /api/notes/:id" });
   const ok = result.status === 200;
   paint("noteOut", ok ? MSGS[lang].noteUpdated(id) : MSGS[lang].notFound(), ok, line("PUT", path, result));
@@ -333,6 +344,7 @@ async function noteUpdate(id) {
 async function noteDelete(id) {
   if (!window.confirm(I18N[lang].confirmNote + " " + id + "?")) return;
   const path = "/api/notes/" + id;
+  begin("noteOut", I18N[lang].busyWrite);
   const result = await callJson(ctx, "DELETE", path, undefined, { label: "DELETE /api/notes/:id" });
   const ok = result.status === 204;
   paint("noteOut", ok ? MSGS[lang].noteDeleted(id) : MSGS[lang].notFound(), ok, line("DELETE", path, result));
@@ -365,6 +377,7 @@ async function authGood() {
   saveToken(token);
   if (!token) { toast(I18N[lang].typePassword); return; }
   const path = "/api/kv/authtest";
+  begin("authOut", I18N[lang].busyReq);
   const result = await callJson(ctx, "PUT", path, { value: "ok" }, { label: "PUT /api/kv/:key (auth)" });
   const ok = result.status === 200;
   const human = ok ? (protectedMode ? MSGS[lang].authAccepted() : MSGS[lang].authOpenServer()) : MSGS[lang].authRejected();
@@ -375,6 +388,7 @@ async function authGood() {
 async function authWrong() {
   const raw = JSON.stringify({ value: "ok" });
   const headers = { "Content-Type": "application/json", "X-API-Key": I18N[lang].wrongKey };
+  begin("authOut", I18N[lang].busyReq);
   const result = await doFetch("PUT", "/api/kv/authtest", raw, headers);
   trace({ method: "PUT", path: "/api/kv/authtest", reqBody: raw, status: result.status,
     ms: result.ms, bytes: result.bytes, respBody: result.text, label: "PUT /api/kv/:key (wrong key)" });
@@ -386,6 +400,7 @@ async function authWrong() {
 
 async function authNone() {
   const path = "/api/kv/authtest";
+  begin("authOut", I18N[lang].busyReq);
   const result = await callJson(ctx, "PUT", path, { value: "ok" },
     { noAuth: true, label: "PUT /api/kv/:key (no key)" });
   const denied = result.status === 401;
@@ -407,6 +422,7 @@ function authForget() {
 
 async function echoSend() {
   const text = cache("echoInput").value;
+  begin("echoOut", I18N[lang].busyReq);
   const result = await callJson(ctx, "POST", "/api/echo", { data: text }, { label: "POST /api/echo" });
   let human = MSGS[lang].badRequest();
   if (result.status === 200) {
@@ -430,6 +446,7 @@ async function runProbe(kind) {
     errRoute: ["GET", "/no-such-route", undefined, "GET /no-such-route"]
   };
   const [method, path, body, label] = specs[kind];
+  begin("errOut", I18N[lang].busyReq);
   const result = await callJson(ctx, method, path, body, { label });
   const human = {
     400: MSGS[lang].badRequest(),
@@ -453,6 +470,7 @@ function selectPerf(count) {
 
 async function perfRun() {
   const count = perfCount;
+  begin("perfOut", I18N[lang].busyBench);
   const started = performance.now();
   const results = await Promise.all(
     Array.from({ length: count }, () => fetch("/health").then((r) => r.ok).catch(() => false))
@@ -680,7 +698,14 @@ const actions = {
 };
 
 const noteHandlers = { noteCreate, noteList };
-const probes = { errMissing, errBadId, errMethod, errPayload, errTooBig, errRoute };
+const probes = {
+  errMissing: () => runProbe("errMissing"),
+  errBadId: () => runProbe("errBadId"),
+  errMethod: () => runProbe("errMethod"),
+  errPayload: () => runProbe("errPayload"),
+  errTooBig: () => runProbe("errTooBig"),
+  errRoute: () => runProbe("errRoute")
+};
 
 function bind() {
   document.querySelectorAll("[data-action]").forEach((button) => {
@@ -720,8 +745,6 @@ function bind() {
 
   cache("authToken").value = token || I18N[lang].defaultToken;
   selectPerf(10);
-  runId += 1;
-  document.body.dataset.run = String(runId);
 }
 
 function start() {
