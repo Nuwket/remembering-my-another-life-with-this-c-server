@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/assets/reactor-core.svg" alt="Nuclear reactor core mark" width="620">
+<img src="docs/assets/trinity-fireball-1945-amber.jpg" alt="Trinity test fireball, 1945 (amber duotone)" width="620">
 
 # Nuclear C API Server
 
@@ -13,6 +13,9 @@
 ```bash
 make run
 ```
+
+<small>Trinity test fireball, 16&nbsp;ms after detonation — Berlyn Brixner / LANL,
+public domain (<a href="docs/assets/CREDITS.md">credits</a>).</small>
 
 </div>
 
