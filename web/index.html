@@ -4,400 +4,606 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="dark">
-<meta name="description" content="Interactive lab for the Nuclear C API Server: save, fetch, delete, notes, auth, errors and performance, all against the real backend.">
+<meta name="description" content="Nuclear API Lab — interactive laboratory for a hand-written HTTP/1.1 JSON API server in C. Real backend, no mocks.">
 <title>Nuclear C API Server — Lab</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2308090c'/%3E%3Ccircle cx='16' cy='16' r='11' fill='none' stroke='%23f5c542' stroke-width='2'/%3E%3Ccircle cx='16' cy='16' r='3' fill='%23f5c542'/%3E%3Cpath d='M16 5v6M16 21v6M7.5 11l5.2 3M19.3 18l5.2 3M7.5 21l5.2-3M19.3 14l5.2-3' stroke='%23f5c542' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
+<a class="skip" href="#core">Skip to lab</a>
+
 <div class="shell">
 
+  <!-- ============================ TOPBAR ============================ -->
+  <nav class="topbar" aria-label="primary">
+    <a class="brand" href="#core">
+      <span class="brand-rad" aria-hidden="true">&#9762;</span>
+      <span class="brand-name">Nuclear API Lab</span>
+      <span class="brand-tag">C&nbsp;/&nbsp;HTTP&nbsp;/&nbsp;SQLite</span>
+    </a>
+    <div class="topbar-end">
+      <div class="top-links" role="list">
+        <a href="#core" role="listitem" data-i18n="navCore">Overview</a>
+        <a href="#storage" role="listitem" data-i18n="navStorage">Storage</a>
+        <a href="#vault" role="listitem" data-i18n="navSecurity">Security</a>
+        <a href="#http" role="listitem" data-i18n="navHttp">HTTP</a>
+        <a href="#failure" role="listitem" data-i18n="navFailure">Failure</a>
+        <a href="#perf" role="listitem" data-i18n="navPerf">Perf</a>
+        <a href="#tech" role="listitem" data-i18n="navTech">Tech</a>
+      </div>
+      <div class="switch" id="langSwitch" role="group" aria-label="language">
+        <button data-lang="en" aria-pressed="true">EN</button>
+        <button data-lang="pt" aria-pressed="false">PT</button>
+        <button data-lang="ru" aria-pressed="false">RU</button>
+      </div>
+    </div>
+  </nav>
+
   <!-- ============================ HERO ============================ -->
-  <header class="hero">
-    <div class="hero-id">
-      <h1><span class="rad" aria-hidden="true">&#9762;</span> Nuclear API Lab</h1>
-      <p class="tagline" data-i18n="heroTag">Click through the server's real capabilities. No API knowledge required.</p>
-      <p class="hero-status">
-        <span class="beacon" id="beacon" data-state="idle" role="status" aria-live="polite"></span>
+  <header class="hero" id="core">
+    <div class="hero-grid" aria-hidden="true"></div>
+    <div class="hero-main">
+      <p class="hero-kicker">
+        <span class="led" id="beacon" data-state="idle" role="status" aria-live="polite"></span>
+        <span data-i18n="heroKicker">Live backend &middot; core 01</span>
+        <span class="hero-kicker-sep">/</span>
         <span id="healthLine">&mdash;</span>
       </p>
+      <h1>
+        <span class="hero-rad" aria-hidden="true">&#9762;</span>
+        <span class="hero-title">Nuclear API Lab</span>
+      </h1>
+      <p class="hero-lead" data-i18n="heroTag">A hands-on laboratory for an HTTP server engineered in C. Every control hits the real process — no mocks, no sample data.</p>
+      <ul class="hero-chips" aria-label="stack">
+        <li>HTTP/1.1</li>
+        <li>SQLite WAL</li>
+        <li>Thread pool</li>
+        <li>C core</li>
+      </ul>
+      <div class="hero-actions">
+        <a class="btn btn-primary" href="#storage"><span data-i18n="heroCta">Open the lab</span></a>
+        <a class="btn btn-ghost" href="#tech"><span data-i18n="heroTech">Tech mode</span></a>
+      </div>
     </div>
-    <div class="switch" id="langSwitch" role="group" aria-label="language">
-      <button data-lang="en" aria-pressed="true">EN</button>
-      <button data-lang="pt" aria-pressed="false">PT</button>
-      <button data-lang="ru" aria-pressed="false">RU</button>
-    </div>
+    <aside class="hero-panel" aria-label="system status panel">
+      <div class="panel-head">
+        <span class="panel-label" data-i18n="sysStatus">System status</span>
+        <span class="panel-rule" aria-hidden="true"></span>
+        <span class="panel-code">CORE&nbsp;01</span>
+      </div>
+      <dl class="panel-primary">
+        <div>
+          <dt data-i18n="sReq">requests</dt>
+          <dd id="mReq">&mdash;</dd>
+        </div>
+        <div>
+          <dt data-i18n="sErr">errors</dt>
+          <dd id="mErr">&mdash;</dd>
+        </div>
+        <div>
+          <dt data-i18n="sConn">connections</dt>
+          <dd id="mConn">&mdash;</dd>
+        </div>
+      </dl>
+      <div class="panel-sub-head">
+        <span data-i18n="storageLabel">Storage</span>
+      </div>
+      <dl class="panel-secondary">
+        <div>
+          <dt data-i18n="sKv">kv keys</dt>
+          <dd id="mKv">&mdash;</dd>
+        </div>
+        <div>
+          <dt data-i18n="sNotes">notes</dt>
+          <dd id="mNotes">&mdash;</dd>
+        </div>
+      </dl>
+    </aside>
   </header>
 
-  <!-- ============================ STATS ============================ -->
-  <dl class="stats" aria-label="server metrics">
-    <div class="stat"><dt data-i18n="sReq">requests</dt><dd id="mReq">&mdash;</dd></div>
-    <div class="stat"><dt data-i18n="sErr">errors</dt><dd id="mErr">&mdash;</dd></div>
-    <div class="stat"><dt data-i18n="sKv">kv keys</dt><dd id="mKv">&mdash;</dd></div>
-    <div class="stat"><dt data-i18n="sNotes">notes</dt><dd id="mNotes">&mdash;</dd></div>
-    <div class="stat"><dt data-i18n="sConn">connections</dt><dd id="mConn">&mdash;</dd></div>
-  </dl>
-
-  <!-- ============================ LAB ============================ -->
-  <div class="grid-2">
-
-    <!-- KV -->
-    <section class="card" aria-labelledby="kvTitle">
-      <div class="card-head">
-        <span class="card-icon" aria-hidden="true">&#128190;</span>
-        <div>
-          <h2 id="kvTitle" data-i18n="kvTitle">Save a value</h2>
-          <p data-i18n="kvSub">Key&ndash;value store, backed by SQLite</p>
-        </div>
-        <span class="spacer"></span>
-        <span class="method" data-m="PUT">PUT</span>
+  <!-- ============================ 02 STORAGE + 03 NOTES ============================ -->
+  <section class="chapter" id="storage" aria-labelledby="storageTitle">
+    <header class="chapter-head">
+      <span class="chapter-num" aria-hidden="true">02</span>
+      <div class="chapter-text">
+        <p class="chapter-kicker" data-i18n="chStorage">Storage lab</p>
+        <h2 id="storageTitle" data-i18n="kvTitle">Save a value</h2>
       </div>
-      <div class="card-body">
-        <p class="card-note" data-i18n="kvNote">Give the server a name and a value. It writes the row and tells you what it did.</p>
+    </header>
 
-        <div class="fields">
-          <label class="field">
-            <span data-i18n="lKey">key</span>
-            <input id="kvKey" value="meu_nome" data-tip="key" autocomplete="off" spellcheck="false">
-          </label>
-          <label class="field">
-            <span data-i18n="lValue">value</span>
-            <input id="kvValue" value="Nuwket" data-tip="value" autocomplete="off">
-          </label>
+    <div class="split">
+      <!-- KV module -->
+      <article class="module" aria-labelledby="kvTitle">
+        <div class="module-head">
+          <span class="module-icon" aria-hidden="true">&#128190;</span>
+          <div class="module-id">
+            <p class="module-code">STORAGE&nbsp;CORE</p>
+            <h3 id="kvTitle" data-i18n="kvTitle">Save a value</h3>
+            <p data-i18n="kvSub">Key&ndash;value store, backed by SQLite</p>
+          </div>
+          <span class="spacer"></span>
+          <span class="method" data-m="PUT">PUT</span>
         </div>
+        <div class="module-body">
+          <p class="module-note" data-i18n="kvNote">Give the server a name and a value. It writes the row and tells you what it did.</p>
+
+          <div class="fields">
+            <label class="field">
+              <span data-i18n="lKey">key</span>
+              <input id="kvKey" value="meu_nome" data-tip="key" autocomplete="off" spellcheck="false">
+            </label>
+            <label class="field">
+              <span data-i18n="lValue">value</span>
+              <input id="kvValue" value="Nuwket" data-tip="value" autocomplete="off">
+            </label>
+          </div>
+
+          <div class="actions">
+            <button class="btn btn-primary" data-action="kvSave"><span class="spinner"></span><span data-i18n="bSave">Save</span></button>
+            <button class="btn btn-secondary" data-action="kvFetch"><span class="spinner"></span><span data-i18n="bFetch">Fetch</span></button>
+            <button class="btn btn-danger" data-action="kvDelete"><span class="spinner"></span><span data-i18n="bDelete">Delete</span></button>
+          </div>
+
+          <div class="output" role="group" aria-label="output">
+            <div class="output-bar">
+              <span class="output-label" data-i18n="outLabel">Output</span>
+              <span class="output-rule" aria-hidden="true"></span>
+            </div>
+            <p class="readout" id="kvOut" aria-live="polite" data-i18n="idle">ready</p>
+          </div>
+
+          <details class="disclose">
+            <summary><span class="disclose-tag" data-i18n="howTag">How it works</span></summary>
+            <div class="disclose-body" data-how="save"></div>
+          </details>
+          <details class="disclose">
+            <summary><span class="disclose-tag" data-i18n="cmpTag">Other languages</span><span class="disclose-hint" data-i18n="cmpSave">How would other languages do this?</span></summary>
+            <div class="disclose-body" data-fn="save"></div>
+          </details>
+        </div>
+      </article>
+
+      <!-- NOTES module -->
+      <article class="module" id="notes" aria-labelledby="noteTitle">
+        <div class="module-head">
+          <span class="module-icon" aria-hidden="true">&#128221;</span>
+          <div class="module-id">
+            <p class="module-code">NOTE&nbsp;STORAGE</p>
+            <h3 id="noteTitle" data-i18n="noteTitle">Notes</h3>
+            <p data-i18n="noteSub">Numbered rows in the same database</p>
+          </div>
+          <span class="spacer"></span>
+          <span class="method" data-m="POST">POST</span>
+        </div>
+        <div class="module-body">
+          <p class="module-note" data-i18n="noteNote">Create a note, then edit or delete it from the list. Ids are assigned by the server.</p>
+
+          <div class="fields">
+            <label class="field">
+              <span data-i18n="lTitle">title</span>
+              <input id="noteTitleValue" value="Minha primeira nota" data-tip="title" autocomplete="off">
+            </label>
+          </div>
+          <label class="field">
+            <span data-i18n="lText">text</span>
+            <textarea id="noteBodyValue" data-tip="body" rows="2">Minha primeira nota no C Server</textarea>
+          </label>
+
+          <div class="actions actions-tight">
+            <button class="btn btn-primary" data-note="noteCreate"><span class="spinner"></span><span data-i18n="bCreate">Create note</span></button>
+            <button class="btn btn-secondary" data-note="noteList"><span class="spinner"></span><span data-i18n="bList">Refresh list</span></button>
+          </div>
+
+          <div class="output" role="group" aria-label="output">
+            <div class="output-bar">
+              <span class="output-label" data-i18n="outLabel">Output</span>
+              <span class="output-rule" aria-hidden="true"></span>
+            </div>
+            <p class="readout" id="noteOut" aria-live="polite" data-i18n="idle">ready</p>
+          </div>
+
+          <div class="items" id="noteList"></div>
+
+          <details class="disclose">
+            <summary><span class="disclose-tag" data-i18n="howTag">How it works</span></summary>
+            <div class="disclose-body" data-how="note"></div>
+          </details>
+          <details class="disclose">
+            <summary><span class="disclose-tag" data-i18n="cmpTag">Other languages</span><span class="disclose-hint" data-i18n="cmpNote">How would other languages do this?</span></summary>
+            <div class="disclose-body" data-fn="note"></div>
+          </details>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ============================ 04 VAULT + 05 HTTP ============================ -->
+  <section class="chapter" id="vault" aria-labelledby="authTitle">
+    <header class="chapter-head">
+      <span class="chapter-num" aria-hidden="true">04</span>
+      <div class="chapter-text">
+        <p class="chapter-kicker" data-i18n="chVault">Security / vault</p>
+        <h2 data-i18n="authTitle">Vault</h2>
+      </div>
+    </header>
+
+    <div class="split">
+      <!-- VAULT -->
+      <article class="module module-restricted" aria-labelledby="authTitle">
+        <div class="module-head">
+          <span class="module-icon" aria-hidden="true">&#128274;</span>
+          <div class="module-id">
+            <p class="module-code">SECURE&nbsp;VAULT</p>
+            <h3 id="authTitle" data-i18n="authTitle">Vault</h3>
+            <p data-i18n="authSub">Optional password for write operations</p>
+          </div>
+          <span class="spacer"></span>
+          <span class="badge" id="authBadge" data-tone="ok">&mdash;</span>
+        </div>
+        <div class="module-body">
+          <p class="module-note" data-i18n="authNote">With --api-key, writes require a matching X-API-Key header. Reads stay open.</p>
+
+          <div class="notice" id="authNotice" hidden></div>
+
+          <div class="fields">
+            <label class="field">
+              <span data-i18n="lPass">demo password</span>
+              <input id="authToken" type="password" value="demo" data-tip="tok" autocomplete="off">
+            </label>
+          </div>
+
+          <div class="actions">
+            <button class="btn btn-success" data-action="authGood"><span class="spinner"></span><span data-i18n="bAuthGood">Right password</span></button>
+            <button class="btn btn-danger" data-action="authWrong"><span class="spinner"></span><span data-i18n="bAuthWrong">Wrong password</span></button>
+            <button class="btn btn-secondary" data-action="authNone"><span class="spinner"></span><span data-i18n="bAuthNone">No password</span></button>
+            <button class="btn btn-ghost" data-action="authForget" data-i18n="bForget">Forget</button>
+          </div>
+
+          <div class="output" role="group" aria-label="output">
+            <div class="output-bar">
+              <span class="output-label" data-i18n="outLabel">Output</span>
+              <span class="output-rule" aria-hidden="true"></span>
+            </div>
+            <p class="readout" id="authOut" aria-live="polite" data-i18n="idle">ready</p>
+          </div>
+
+          <details class="disclose">
+            <summary><span class="disclose-tag" data-i18n="howTag">How it works</span></summary>
+            <div class="disclose-body" data-how="auth"></div>
+          </details>
+          <details class="disclose">
+            <summary><span class="disclose-tag" data-i18n="cmpTag">Other languages</span><span class="disclose-hint" data-i18n="cmpAuth">How would other languages do this?</span></summary>
+            <div class="disclose-body" data-fn="auth"></div>
+          </details>
+        </div>
+      </article>
+
+      <!-- ECHO / HTTP MESSAGE -->
+      <article class="module" id="http" aria-labelledby="echoTitle">
+        <div class="module-head">
+          <span class="module-icon" aria-hidden="true">&#128225;</span>
+          <div class="module-id">
+            <p class="module-code">HTTP&nbsp;MESSAGE&nbsp;LAB</p>
+            <h3 id="echoTitle" data-i18n="echoTitle">Send a message</h3>
+            <p data-i18n="echoSub">The server returns exactly what it received</p>
+          </div>
+          <span class="spacer"></span>
+          <span class="method" data-m="POST">POST</span>
+        </div>
+        <div class="module-body">
+          <p class="module-note" data-i18n="echoNote">Type anything. The value is JSON-encoded, sent, parsed back and shown again on the other side.</p>
+
+          <ol class="flow" aria-hidden="true">
+            <li data-i18n="flowMsg">Message</li>
+            <li data-i18n="flowReq">HTTP request</li>
+            <li data-i18n="flowSrv">C server</li>
+            <li data-i18n="flowRes">Response</li>
+          </ol>
+
+          <label class="field">
+            <span data-i18n="lMessage">message</span>
+            <input id="echoInput" value="Ol&#225; servidor!" autocomplete="off">
+          </label>
+
+          <div class="actions actions-tight">
+            <button class="btn btn-primary" data-action="echoSend"><span class="spinner"></span><span data-i18n="bSend">Send</span></button>
+          </div>
+
+          <div class="output" role="group" aria-label="output">
+            <div class="output-bar">
+              <span class="output-label" data-i18n="outLabel">Output</span>
+              <span class="output-rule" aria-hidden="true"></span>
+            </div>
+            <p class="readout" id="echoOut" aria-live="polite" data-i18n="idle">ready</p>
+          </div>
+
+          <details class="disclose">
+            <summary><span class="disclose-tag" data-i18n="howTag">How it works</span></summary>
+            <div class="disclose-body" data-how="echo"></div>
+          </details>
+          <details class="disclose">
+            <summary><span class="disclose-tag" data-i18n="cmpTag">Other languages</span><span class="disclose-hint" data-i18n="cmpEcho">How would other languages do this?</span></summary>
+            <div class="disclose-body" data-fn="echo"></div>
+          </details>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- ============================ 06 FAILURE LAB ============================ -->
+  <section class="chapter" id="failure" aria-labelledby="errTitle">
+    <header class="chapter-head">
+      <span class="chapter-num" aria-hidden="true">06</span>
+      <div class="chapter-text">
+        <p class="chapter-kicker" data-i18n="chFailure">Failure lab</p>
+        <h2 data-i18n="errTitle">Make the server complain</h2>
+      </div>
+      <span class="chapter-aside" data-i18n="errSub">Real rejections with real status codes</span>
+    </header>
+
+    <article class="module module-wide">
+      <div class="module-head">
+        <span class="module-icon module-icon-warn" aria-hidden="true">&#9888;</span>
+        <div class="module-id">
+          <p class="module-code">REAL&nbsp;ERROR&nbsp;RESPONSES</p>
+          <h3 data-i18n="errTitle">Make the server complain</h3>
+          <p data-i18n="errSub">Real rejections with real status codes</p>
+        </div>
+      </div>
+      <div class="module-body">
+        <p class="module-note" data-i18n="errNote">Not every request has to succeed. Each button provokes a specific failure so you can watch validation and error mapping behave.</p>
+
+        <div class="gallery">
+          <div class="probe">
+            <p class="probe-code">404</p>
+            <strong data-i18n="pGoneT">Missing key</strong>
+            <span data-i18n="pGoneD">Ask for a value that was never stored.</span>
+            <button class="btn btn-ghost btn-block" data-err="errMissing"><span class="spinner"></span><span data-i18n="try">Test</span></button>
+          </div>
+          <div class="probe">
+            <p class="probe-code">400</p>
+            <strong data-i18n="pIdT">Invalid id</strong>
+            <span data-i18n="pIdD">Note ids must be positive integers.</span>
+            <button class="btn btn-ghost btn-block" data-err="errBadId"><span class="spinner"></span><span data-i18n="try">Test</span></button>
+          </div>
+          <div class="probe">
+            <p class="probe-code">405</p>
+            <strong data-i18n="pMethodT">Wrong method</strong>
+            <span data-i18n="pMethodD">POST is not allowed on /health.</span>
+            <button class="btn btn-ghost btn-block" data-err="errMethod"><span class="spinner"></span><span data-i18n="try">Test</span></button>
+          </div>
+          <div class="probe">
+            <p class="probe-code">400</p>
+            <strong data-i18n="pDataT">Invalid payload</strong>
+            <span data-i18n="pDataD">Send a body without the required field.</span>
+            <button class="btn btn-ghost btn-block" data-err="errPayload"><span class="spinner"></span><span data-i18n="try">Test</span></button>
+          </div>
+          <div class="probe">
+            <p class="probe-code">413</p>
+            <strong data-i18n="pBigT">Oversized body</strong>
+            <span data-i18n="pBigD">Break the 64&nbsp;KB request limit.</span>
+            <button class="btn btn-ghost btn-block" data-err="errTooBig"><span class="spinner"></span><span data-i18n="try">Test</span></button>
+          </div>
+          <div class="probe">
+            <p class="probe-code">404</p>
+            <strong data-i18n="pRouteT">Unknown route</strong>
+            <span data-i18n="pRouteD">Ask for a path the server does not serve.</span>
+            <button class="btn btn-ghost btn-block" data-err="errRoute"><span class="spinner"></span><span data-i18n="try">Test</span></button>
+          </div>
+        </div>
+
+        <div class="output" role="group" aria-label="output">
+          <div class="output-bar">
+            <span class="output-label" data-i18n="outLabel">Output</span>
+            <span class="output-rule" aria-hidden="true"></span>
+          </div>
+          <p class="readout" id="errOut" aria-live="polite" data-i18n="idle">ready</p>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <!-- ============================ 07 PERFORMANCE ============================ -->
+  <section class="chapter" id="perf" aria-labelledby="perfTitle">
+    <header class="chapter-head">
+      <span class="chapter-num" aria-hidden="true">07</span>
+      <div class="chapter-text">
+        <p class="chapter-kicker" data-i18n="chPerf">Performance lab</p>
+        <h2 data-i18n="perfTitle">How fast does it answer?</h2>
+      </div>
+      <span class="chapter-aside" data-i18n="perfSub">Real concurrent requests, timed in the browser</span>
+    </header>
+
+    <article class="module module-wide">
+      <div class="module-head">
+        <span class="module-icon" aria-hidden="true">&#9889;</span>
+        <div class="module-id">
+          <p class="module-code">BENCHMARK</p>
+          <h3 data-i18n="perfTitle">How fast does it answer?</h3>
+          <p data-i18n="perfSub">Real concurrent requests, timed in the browser</p>
+        </div>
+      </div>
+      <div class="module-body">
+        <p class="module-note" data-i18n="perfNote">The runner fires N simultaneous GET /health calls and reports wall time plus the average per request. Nothing is simulated.</p>
 
         <div class="actions">
-          <button class="btn btn-primary" data-action="kvSave"><span class="spinner"></span><span data-i18n="bSave">Save</span></button>
-          <button class="btn btn-ghost" data-action="kvFetch"><span class="spinner"></span><span data-i18n="bFetch">Fetch</span></button>
-          <button class="btn btn-danger" data-action="kvDelete"><span class="spinner"></span><span data-i18n="bDelete">Delete</span></button>
+          <div class="segmented" id="perfPicker" role="group" aria-label="request count">
+            <button data-perf="1" aria-pressed="false">1</button>
+            <button data-perf="10" aria-pressed="true">10</button>
+            <button data-perf="100" aria-pressed="false">100</button>
+          </div>
+          <button class="btn btn-primary" data-action="perfRun"><span class="spinner"></span><span data-i18n="bRunPerf">Run test</span></button>
         </div>
 
-        <p class="readout" id="kvOut" aria-live="polite" data-i18n="idle">ready</p>
+        <div class="output" role="group" aria-label="output">
+          <div class="output-bar">
+            <span class="output-label" data-i18n="outLabel">Output</span>
+            <span class="output-rule" aria-hidden="true"></span>
+          </div>
+          <p class="readout" id="perfOut" aria-live="polite" data-i18n="idle">ready</p>
+        </div>
 
         <details class="disclose">
-          <summary data-i18n="howSave">How does it work?</summary>
-          <div class="disclose-body" data-how="save"></div>
-        </details>
-        <details class="disclose">
-          <summary data-i18n="cmpSave">How would other languages do this?</summary>
-          <div class="disclose-body" data-fn="save"></div>
+          <summary><span class="disclose-tag" data-i18n="howTag">How it works</span></summary>
+          <div class="disclose-body" data-how="perf"></div>
         </details>
       </div>
-    </section>
-
-    <!-- NOTES -->
-    <section class="card" aria-labelledby="noteTitle">
-      <div class="card-head">
-        <span class="card-icon" aria-hidden="true">&#128221;</span>
-        <div>
-          <h2 id="noteTitle" data-i18n="noteTitle">Notes</h2>
-          <p data-i18n="noteSub">Numbered rows in the same database</p>
-        </div>
-        <span class="spacer"></span>
-        <span class="method" data-m="POST">POST</span>
-      </div>
-      <div class="card-body">
-        <p class="card-note" data-i18n="noteNote">Create a note, then edit or delete it from the list. Ids are assigned by the server.</p>
-
-        <div class="fields">
-          <label class="field">
-            <span data-i18n="lTitle">title</span>
-            <input id="noteTitleValue" value="Minha primeira nota" data-tip="title" autocomplete="off">
-          </label>
-        </div>
-        <label class="field">
-          <span data-i18n="lText">text</span>
-          <textarea id="noteBodyValue" data-tip="body" rows="2">Minha primeira nota no C Server</textarea>
-        </label>
-
-        <div class="actions" style="margin-top:12px">
-          <button class="btn btn-primary" data-note="noteCreate"><span class="spinner"></span><span data-i18n="bCreate">Create note</span></button>
-          <button class="btn btn-ghost" data-note="noteList"><span class="spinner"></span><span data-i18n="bList">Refresh list</span></button>
-        </div>
-
-        <p class="readout" id="noteOut" aria-live="polite" data-i18n="idle">ready</p>
-        <div class="items" id="noteList"></div>
-
-        <details class="disclose">
-          <summary data-i18n="howNote">How does it work?</summary>
-          <div class="disclose-body" data-how="note"></div>
-        </details>
-        <details class="disclose">
-          <summary data-i18n="cmpNote">How would other languages do this?</summary>
-          <div class="disclose-body" data-fn="note"></div>
-        </details>
-      </div>
-    </section>
-
-    <!-- VAULT -->
-    <section class="card" aria-labelledby="authTitle">
-      <div class="card-head">
-        <span class="card-icon" aria-hidden="true">&#128274;</span>
-        <div>
-          <h2 id="authTitle" data-i18n="authTitle">Vault</h2>
-          <p data-i18n="authSub">Optional password for write operations</p>
-        </div>
-        <span class="spacer"></span>
-        <span class="badge" id="authBadge" data-tone="ok">&mdash;</span>
-      </div>
-      <div class="card-body">
-        <p class="card-note" data-i18n="authNote">When the server runs with <code>--api-key</code>, writes need a matching <code>X-API-Key</code>. Reads stay open.</p>
-
-        <div class="notice" id="authNotice" hidden></div>
-
-        <div class="fields">
-          <label class="field">
-            <span data-i18n="lPass">demo password</span>
-            <input id="authToken" type="password" value="demo" data-tip="tok" autocomplete="off">
-          </label>
-        </div>
-
-        <div class="actions">
-          <button class="btn btn-primary" data-action="authGood"><span class="spinner"></span><span data-i18n="bAuthGood">Right password</span></button>
-          <button class="btn btn-ghost" data-action="authWrong"><span class="spinner"></span><span data-i18n="bAuthWrong">Wrong password</span></button>
-          <button class="btn btn-ghost" data-action="authNone"><span class="spinner"></span><span data-i18n="bAuthNone">No password</span></button>
-          <button class="btn btn-ghost" data-action="authForget" data-i18n="bForget">Forget</button>
-        </div>
-
-        <p class="readout" id="authOut" aria-live="polite" data-i18n="idle">ready</p>
-
-        <details class="disclose">
-          <summary data-i18n="howAuth">How does it work?</summary>
-          <div class="disclose-body" data-how="auth"></div>
-        </details>
-        <details class="disclose">
-          <summary data-i18n="cmpAuth">How would other languages do this?</summary>
-          <div class="disclose-body" data-fn="auth"></div>
-        </details>
-      </div>
-    </section>
-
-    <!-- ECHO -->
-    <section class="card" aria-labelledby="echoTitle">
-      <div class="card-head">
-        <span class="card-icon" aria-hidden="true">&#128225;</span>
-        <div>
-          <h2 id="echoTitle" data-i18n="echoTitle">Send a message</h2>
-          <p data-i18n="echoSub">The server returns exactly what it received</p>
-        </div>
-        <span class="spacer"></span>
-        <span class="method" data-m="POST">POST</span>
-      </div>
-      <div class="card-body">
-        <p class="card-note" data-i18n="echoNote">Type anything. The value is JSON-encoded, sent, parsed back and shown again on the other side.</p>
-
-        <label class="field">
-          <span data-i18n="lMessage">message</span>
-          <input id="echoInput" value="Ol&#225; servidor!" autocomplete="off">
-        </label>
-
-        <div class="actions" style="margin-top:12px">
-          <button class="btn btn-primary" data-action="echoSend"><span class="spinner"></span><span data-i18n="bSend">Send</span></button>
-        </div>
-
-        <p class="readout" id="echoOut" aria-live="polite" data-i18n="idle">ready</p>
-
-        <details class="disclose">
-          <summary data-i18n="howEcho">How does it work?</summary>
-          <div class="disclose-body" data-how="echo"></div>
-        </details>
-        <details class="disclose">
-          <summary data-i18n="cmpEcho">How would other languages do this?</summary>
-          <div class="disclose-body" data-fn="echo"></div>
-        </details>
-      </div>
-    </section>
-
-  </div>
-
-  <!-- ============================ ERRORS ============================ -->
-  <section class="card" style="margin-top:20px" aria-labelledby="errTitle">
-    <div class="card-head">
-      <span class="card-icon" aria-hidden="true">&#9888;</span>
-      <div>
-        <h2 id="errTitle" data-i18n="errTitle">Make the server complain</h2>
-        <p data-i18n="errSub">Real rejections with real status codes</p>
-      </div>
-    </div>
-    <div class="card-body">
-      <p class="card-note" data-i18n="errNote">Not every request has to succeed. Each button provokes a specific failure so you can see how validation and error mapping behave.</p>
-
-      <div class="gallery">
-        <div class="probe">
-          <strong data-i18n="pGoneT">Missing key</strong>
-          <span data-i18n="pGoneD">Ask for a value that was never stored.</span>
-          <button class="btn btn-ghost" data-err="errMissing"><span class="spinner"></span><span data-i18n="try">Test</span></button>
-        </div>
-        <div class="probe">
-          <strong data-i18n="pIdT">Invalid id</strong>
-          <span data-i18n="pIdD">Note ids must be positive integers.</span>
-          <button class="btn btn-ghost" data-err="errBadId"><span class="spinner"></span><span data-i18n="try">Test</span></button>
-        </div>
-        <div class="probe">
-          <strong data-i18n="pMethodT">Wrong method</strong>
-          <span data-i18n="pMethodD">POST is not allowed on /health.</span>
-          <button class="btn btn-ghost" data-err="errMethod"><span class="spinner"></span><span data-i18n="try">Test</span></button>
-        </div>
-        <div class="probe">
-          <strong data-i18n="pDataT">Invalid payload</strong>
-          <span data-i18n="pDataD">Send a body without the required field.</span>
-          <button class="btn btn-ghost" data-err="errPayload"><span class="spinner"></span><span data-i18n="try">Test</span></button>
-        </div>
-        <div class="probe">
-          <strong data-i18n="pBigT">Oversized body</strong>
-          <span data-i18n="pBigD">Break the 64&nbsp;KB request limit.</span>
-          <button class="btn btn-ghost" data-err="errTooBig"><span class="spinner"></span><span data-i18n="try">Test</span></button>
-        </div>
-        <div class="probe">
-          <strong data-i18n="pRouteT">Unknown route</strong>
-          <span data-i18n="pRouteD">Ask for a path the server does not serve.</span>
-          <button class="btn btn-ghost" data-err="errRoute"><span class="spinner"></span><span data-i18n="try">Test</span></button>
-        </div>
-      </div>
-
-      <p class="readout" id="errOut" aria-live="polite" data-i18n="idle">ready</p>
-    </div>
+    </article>
   </section>
 
-  <!-- ============================ PERF ============================ -->
-  <section class="card" style="margin-top:20px" aria-labelledby="perfTitle">
-    <div class="card-head">
-      <span class="card-icon" aria-hidden="true">&#9889;</span>
-      <div>
-        <h2 id="perfTitle" data-i18n="perfTitle">How fast does it answer?</h2>
-        <p data-i18n="perfSub">Real concurrent requests, timed in the browser</p>
+  <!-- ============================ 08 LANGUAGE LAB ============================ -->
+  <section class="chapter" id="languages" aria-labelledby="langTitle">
+    <header class="chapter-head">
+      <span class="chapter-num" aria-hidden="true">08</span>
+      <div class="chapter-text">
+        <p class="chapter-kicker" data-i18n="chLang">Language lab</p>
+        <h2 data-i18n="langTitle">The same task, five languages</h2>
       </div>
-    </div>
-    <div class="card-body">
-      <p class="card-note" data-i18n="perfNote">The runner fires N simultaneous <code>GET /health</code> calls and reports wall time and the average per request. Nothing is simulated.</p>
+      <span class="chapter-aside" data-i18n="langSub">Functionally equivalent, stylistically different</span>
+    </header>
 
-      <div class="actions">
-        <div class="segmented" id="perfPicker" role="group" aria-label="request count">
-          <button data-perf="1" aria-pressed="false">1</button>
-          <button data-perf="10" aria-pressed="true">10</button>
-          <button data-perf="100" aria-pressed="false">100</button>
+    <article class="module module-wide">
+      <div class="module-head">
+        <span class="module-icon" aria-hidden="true">&#127760;</span>
+        <div class="module-id">
+          <p class="module-code">COMPARISON</p>
+          <h3 data-i18n="langTitle">The same task, five languages</h3>
+          <p data-i18n="langSub">Functionally equivalent, stylistically different</p>
         </div>
-        <button class="btn btn-primary" data-action="perfRun"><span class="spinner"></span><span data-i18n="bRunPerf">Run test</span></button>
       </div>
+      <div class="module-body">
+        <p class="module-note" data-i18n="langNote">Pick a language for the descriptive notes and to highlight its column. C snippets are real excerpts from this server; the others are labelled examples and are not executed here.</p>
 
-      <p class="readout" id="perfOut" aria-live="polite" data-i18n="idle">ready</p>
+        <div class="tabs" id="implTabs" role="group" aria-label="implementation language">
+          <button data-impl="c" aria-pressed="true">C</button>
+          <button data-impl="python" aria-pressed="false">Python</button>
+          <button data-impl="go" aria-pressed="false">Go</button>
+          <button data-impl="rust" aria-pressed="false">Rust</button>
+          <button data-impl="node" aria-pressed="false">Node.js</button>
+        </div>
 
-      <details class="disclose">
-        <summary data-i18n="howPerf">How does it work?</summary>
-        <div class="disclose-body" data-how="perf"></div>
-      </details>
-    </div>
+        <p class="lang-note" id="implNote" aria-live="polite">&mdash;</p>
+
+        <div class="table-wrap">
+          <table class="matrix">
+            <thead>
+              <tr>
+                <th data-i18n="mPiece">piece</th>
+                <th>C</th><th>Python</th><th>Go</th><th>Rust</th><th>Node.js</th>
+              </tr>
+            </thead>
+            <tbody id="matrixBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </article>
   </section>
 
-  <!-- ============================ LANGUAGES ============================ -->
-  <section class="card" style="margin-top:20px" aria-labelledby="langTitle">
-    <div class="card-head">
-      <span class="card-icon" aria-hidden="true">&#127760;</span>
-      <div>
-        <h2 id="langTitle" data-i18n="langTitle">The same task, five languages</h2>
-        <p data-i18n="langSub">Functionally equivalent, stylistically different</p>
-      </div>
-    </div>
-    <div class="card-body">
-      <p class="card-note" data-i18n="langNote">Pick a language to see the descriptive notes and highlight its column below. The C snippets are real excerpts from this server; the others are clearly labelled examples that are not executed here.</p>
-
-      <div class="tabs" id="implTabs" role="group" aria-label="implementation language">
-        <button data-impl="c" aria-pressed="true">C</button>
-        <button data-impl="python" aria-pressed="false">Python</button>
-        <button data-impl="go" aria-pressed="false">Go</button>
-        <button data-impl="rust" aria-pressed="false">Rust</button>
-        <button data-impl="node" aria-pressed="false">Node.js</button>
-      </div>
-
-      <p class="lang-note" id="implNote" aria-live="polite">&mdash;</p>
-
-      <div class="table-wrap" style="margin-top:14px">
-        <table class="matrix">
-          <thead>
-            <tr>
-              <th data-i18n="mPiece">piece</th>
-              <th>C</th><th>Python</th><th>Go</th><th>Rust</th><th>Node.js</th>
-            </tr>
-          </thead>
-          <tbody id="matrixBody"></tbody>
-        </table>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============================ TECH DRAWER ============================ -->
-  <details class="drawer">
-    <summary>
-      <span class="card-icon" aria-hidden="true">&#128295;</span>
-      <div>
+  <!-- ============================ 09 TECH MODE ============================ -->
+  <section class="chapter" id="tech" aria-labelledby="drawerTitle">
+    <header class="chapter-head">
+      <span class="chapter-num" aria-hidden="true">09</span>
+      <div class="chapter-text">
+        <p class="chapter-kicker" data-i18n="chTech">Advanced</p>
         <h2 data-i18n="drawerTitle">Tech mode</h2>
-        <p data-i18n="drawerSub">Inspector, history, curl and a raw composer</p>
       </div>
-      <span class="spacer"></span>
-    </summary>
-    <div class="drawer-body">
+      <span class="chapter-aside" data-i18n="drawerSub">Inspector, history, curl and a raw composer</span>
+    </header>
 
-      <div class="explain">
-        <b>auto-explain &middot; english</b>
-        <span id="explainText" aria-live="polite">Run a request to see a plain-English diagnosis.</span>
+    <details class="drawer">
+      <summary>
+        <span class="drawer-mark" aria-hidden="true"></span>
+        <div class="module-id">
+          <p class="module-code">TECH&nbsp;MODE</p>
+          <h3 data-i18n="drawerTitle">Tech mode</h3>
+          <p data-i18n="drawerSub">Inspector, history, curl and a raw composer</p>
+        </div>
+        <span class="spacer"></span>
+      </summary>
+      <div class="drawer-body">
+
+        <div class="explain">
+          <b>auto-explain &middot; english</b>
+          <span id="explainText" aria-live="polite">Run a request to see a plain-English diagnosis.</span>
+        </div>
+
+        <div class="fields fields-composer">
+          <label class="field field-method">
+            <span>method</span>
+            <select id="rawMethod">
+              <option>GET</option><option>POST</option><option>PUT</option><option>DELETE</option>
+            </select>
+          </label>
+          <label class="field">
+            <span data-i18n="lPath">path</span>
+            <input id="rawPath" value="/health" data-tip="path" autocomplete="off" spellcheck="false">
+          </label>
+        </div>
+
+        <div class="fields">
+          <label class="field">
+            <span data-i18n="lHeaders">headers</span>
+            <textarea id="rawHeaders" rows="3" data-tip="hdrs" spellcheck="false">Content-Type: application/json</textarea>
+          </label>
+          <label class="field">
+            <span data-i18n="lRawBody">body</span>
+            <textarea id="rawBody" rows="3" data-tip="rawbody" spellcheck="false" placeholder="{ }"></textarea>
+          </label>
+        </div>
+
+        <div class="actions">
+          <button class="btn btn-primary" data-action="rawRun"><span class="spinner"></span><span data-i18n="bExecute">Execute</span></button>
+          <button class="btn btn-secondary" data-action="copyCurl" data-i18n="bCopyCurl">Copy as curl</button>
+          <button class="btn btn-ghost" data-action="clearStream" data-i18n="bClear">Clear</button>
+        </div>
+
+        <div class="output output-flush" role="group" aria-label="last call">
+          <div class="output-bar">
+            <span class="output-label" data-i18n="lastCallLabel">Last call</span>
+            <span class="output-rule" aria-hidden="true"></span>
+          </div>
+          <pre class="stream" id="lastCall" aria-live="polite"></pre>
+        </div>
+
+        <div class="output output-flush" role="group" aria-label="history">
+          <div class="output-bar">
+            <span class="output-label" data-i18n="historyLabel">History</span>
+            <span class="output-rule" aria-hidden="true"></span>
+          </div>
+          <pre class="stream" id="history" aria-label="request history"></pre>
+        </div>
+
+        <div class="table-wrap">
+          <table class="matrix">
+            <thead>
+              <tr>
+                <th data-i18n="mEndpoint">endpoint</th>
+                <th>2xx</th><th>4xx</th><th>5xx</th><th data-i18n="mTotal">total</th>
+              </tr>
+            </thead>
+            <tbody id="sessionBody"></tbody>
+          </table>
+        </div>
       </div>
-
-      <div class="fields" style="margin-top:16px">
-        <label class="field" style="max-width:150px">
-          <span>method</span>
-          <select id="rawMethod">
-            <option>GET</option><option>POST</option><option>PUT</option><option>DELETE</option>
-          </select>
-        </label>
-        <label class="field">
-          <span data-i18n="lPath">path</span>
-          <input id="rawPath" value="/health" data-tip="path" autocomplete="off" spellcheck="false">
-        </label>
-      </div>
-
-      <div class="fields">
-        <label class="field">
-          <span data-i18n="lHeaders">headers</span>
-          <textarea id="rawHeaders" rows="3" data-tip="hdrs" spellcheck="false">Content-Type: application/json</textarea>
-        </label>
-        <label class="field">
-          <span data-i18n="lRawBody">body</span>
-          <textarea id="rawBody" rows="3" data-tip="rawbody" spellcheck="false" placeholder="{ }"></textarea>
-        </label>
-      </div>
-
-      <div class="actions">
-        <button class="btn btn-primary" data-action="rawRun"><span class="spinner"></span><span data-i18n="bExecute">Execute</span></button>
-        <button class="btn btn-ghost" data-action="copyCurl" data-i18n="bCopyCurl">Copy as curl</button>
-        <button class="btn btn-ghost" data-action="clearStream" data-i18n="bClear">Clear</button>
-      </div>
-
-      <pre class="stream" id="lastCall" aria-live="polite"></pre>
-      <pre class="stream" id="history" aria-label="request history"></pre>
-
-      <div class="table-wrap" style="margin-top:16px">
-        <table class="matrix">
-          <thead>
-            <tr>
-              <th data-i18n="mEndpoint">endpoint</th>
-              <th>2xx</th><th>4xx</th><th>5xx</th><th data-i18n="mTotal">total</th>
-            </tr>
-          </thead>
-          <tbody id="sessionBody"></tbody>
-        </table>
-      </div>
-    </div>
-  </details>
+    </details>
+  </section>
 
   <!-- ============================ FOOTER ============================ -->
   <footer class="foot">
-    <p data-i18n="footNote">Every button on this page calls the real C backend. No mocks.</p>
-    <nav class="foot-links" aria-label="raw endpoints">
-      <a href="/health" target="_blank" rel="noopener">/health</a>
-      <a href="/metrics" target="_blank" rel="noopener">/metrics</a>
-      <a href="/api/kv?limit=50" target="_blank" rel="noopener">/api/kv</a>
-      <a href="/api/notes?limit=50" target="_blank" rel="noopener">/api/notes</a>
-    </nav>
+    <div class="foot-brand">
+      <p class="foot-mark"><span aria-hidden="true">&#9762;</span> Nuclear API Lab</p>
+      <p data-i18n="footNote">Every button on this page calls the real C backend. No mocks.</p>
+    </div>
+    <div class="foot-meta">
+      <p class="foot-stack">HTTP/1.1 &middot; SQLite WAL &middot; Thread pool</p>
+      <nav class="foot-links" aria-label="raw endpoints">
+        <a href="/health" target="_blank" rel="noopener">/health</a>
+        <a href="/metrics" target="_blank" rel="noopener">/metrics</a>
+        <a href="/api/kv?limit=50" target="_blank" rel="noopener">/api/kv</a>
+        <a href="/api/notes?limit=50" target="_blank" rel="noopener">/api/notes</a>
+      </nav>
+    </div>
   </footer>
 
 </div>
