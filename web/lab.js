@@ -1,27 +1,56 @@
 /**
- * lab.js - Lab behaviors. The real C backend does the work; this file only
- * translates user intent into real requests and real responses into verdicts.
+ * lab.js — behaviours for the Nuclear API Lab.
+ *
+ * The C server does all the work. This file only translates intent into real
+ * requests and real responses into human verdicts. No mocked data anywhere.
  */
 import { I18N, MSGS, TIPS, HOW, detectLang } from "./i18n.js";
 import { CMP, IMPL, IMPLNAME, LANGNOTES, PIECES, PIECE_L } from "./compare.js";
 import { callJson, doFetch, buildCurl, parseHeaders, explain, loadToken, saveToken, forgetToken } from "./api.js";
 
-let LANG = detectLang();
+const TOKEN_KEY = "capi-key";
+const LANG_KEY = "capi-lang";
+const HISTORY_LIMIT = 15;
+
+let lang = detectLang();
 let token = loadToken();
-let serverOpen = true;
-let lastEntry = null;
+let protectedMode = false;
+let lastCall = null;
 let currentImpl = "c";
 let perfCount = 10;
+let runId = 0;
 
 const history = [];
-const session = {};
-const $ = (id) => document.getElementById(id);
+const session = new Map();
+const els = new Map();
 
-/* ---------------- i18n rendering ---------------- */
+const $ = (id) => document.getElementById(id);
+const cache = (id) => {
+  if (!els.has(id)) els.set(id, $(id));
+  return els.get(id);
+};
+
+/* ------------------------------------------------------------------ *
+ * Toasts
+ * ------------------------------------------------------------------ */
+
+function toast(message, tone) {
+  const box = cache("toasts");
+  const item = document.createElement("div");
+  item.className = "toast";
+  if (tone) item.dataset.tone = tone;
+  item.textContent = message;
+  box.appendChild(item);
+  setTimeout(() => item.remove(), 5200);
+}
+
+/* ------------------------------------------------------------------ *
+ * i18n
+ * ------------------------------------------------------------------ */
 
 function applyLanguage(code) {
   if (!I18N[code]) code = "en";
-  LANG = code;
+  lang = code;
   document.documentElement.lang = code;
   const dict = I18N[code];
 
@@ -41,406 +70,438 @@ function applyLanguage(code) {
     const key = el.getAttribute("data-how");
     if (HOW[code] && HOW[code][key]) el.innerHTML = HOW[code][key];
   });
-  document.querySelectorAll("#langBtns button").forEach((btn) => {
-    const active = btn.getAttribute("data-lang") === code;
-    btn.classList.toggle("active", active);
-    btn.setAttribute("aria-pressed", active ? "true" : "false");
+  document.querySelectorAll("#langSwitch button").forEach((btn) => {
+    btn.setAttribute("aria-pressed", btn.getAttribute("data-lang") === code ? "true" : "false");
   });
 
-  try { localStorage.setItem("capi-lang", code); } catch (e) { /* private mode */ }
+  try { localStorage.setItem(LANG_KEY, code); } catch (e) { /* private mode */ }
 
-  document.querySelectorAll("[data-fn]").forEach((div) => {
-    if (div._sel) renderCompare(div);
+  document.querySelectorAll("[data-fn]").forEach((host) => {
+    if (host._selected) renderCompare(host);
   });
-  renderImplMatrix();
-  updateAuthNotice();
-  if ($("dot").className.indexOf("ok") < 0) refreshHealth(true);
+  renderMatrix();
+  renderAuthBadge();
 }
 
-/* ---------------- toasts ---------------- */
+/* ------------------------------------------------------------------ *
+ * Readouts
+ * ------------------------------------------------------------------ */
 
-function toast(message, ok) {
-  const box = $("toast");
-  const item = document.createElement("div");
-  if (ok) item.className = "ok";
-  item.textContent = message;
-  box.appendChild(item);
-  setTimeout(() => item.remove(), 6000);
+function paint(id, text, ok, meta) {
+  const el = cache(id);
+  el.textContent = text;
+  el.dataset.state = ok === undefined ? "idle" : ok ? "ok" : "fail";
+  if (meta !== undefined) {
+    const tail = document.createElement("span");
+    tail.className = "meta";
+    tail.textContent = meta;
+    el.appendChild(tail);
+  }
 }
 
-/* ---------------- results ---------------- */
-
-function showResult(outId, techId, human, ok, tech) {
-  const el = $(outId);
-  el.textContent = human;
-  el.classList.remove("good", "fail");
-  el.classList.add(ok ? "good" : "fail");
-  if (techId) $(techId).textContent = tech;
+function line(method, path, result, extra) {
+  let text = method + " " + path + "  →  HTTP " + result.status;
+  if (result.ms !== undefined) text += "  ·  " + result.ms + "ms  ·  " + result.bytes + " bytes";
+  if (extra) text += "  ·  " + extra;
+  return text;
 }
 
-function techLine(method, path, result) {
-  return method + " " + path + " → HTTP " + result.status + " · " + result.ms + "ms · " + result.bytes + " bytes";
+function idle(id) {
+  const el = cache(id);
+  el.textContent = I18N[lang].idle;
+  el.dataset.state = "idle";
 }
 
-/* ---------------- tracing + session ---------------- */
-
-function recordSession(label, status) {
-  if (!label) return;
-  const bucket = status >= 200 && status < 300 ? "ok" : status >= 400 && status < 500 ? "c4" : "c5";
-  if (!session[label]) session[label] = { ok: 0, c4: 0, c5: 0 };
-  session[label][bucket] += 1;
-  renderSessionTable();
-}
-
-function renderSessionTable() {
-  const rows = Object.keys(session).sort().map((label) => {
-    const counts = session[label];
-    const total = counts.ok + counts.c4 + counts.c5;
-    return "<tr><td>" + label + "</td><td>" + counts.ok + "</td><td>" + counts.c4 +
-      "</td><td>" + counts.c5 + "</td><td>" + total + "</td></tr>";
-  });
-  $("sessBody").innerHTML = rows.length ? rows.join("") : '<tr><td colspan="5">—</td></tr>';
-}
+/* ------------------------------------------------------------------ *
+ * Tracing
+ * ------------------------------------------------------------------ */
 
 function trace(entry) {
-  lastEntry = entry;
+  lastCall = entry;
   history.unshift(entry);
-  if (history.length > 15) history.pop();
+  if (history.length > HISTORY_LIMIT) history.pop();
 
-  const last = $("devLast");
-  last.textContent =
-    entry.method + " " + entry.path + " → " + entry.status + " · " + entry.ms + "ms · " + entry.bytes + " bytes\n" +
-    "-- request --\n" + (entry.reqBody || "(empty)") + "\n-- response --\n" + entry.respBody;
-  last.scrollTop = last.scrollHeight;
-  $("devExplainTxt").textContent = explain(entry.status, entry.respBody);
+  cache("lastCall").textContent =
+    entry.method + " " + entry.path + "\n" +
+    "→ HTTP " + entry.status + "  ·  " + entry.ms + "ms  ·  " + entry.bytes + " bytes\n\n" +
+    "request:\n" + (entry.reqBody || "(empty)") + "\n\nresponse:\n" + entry.respBody;
 
-  const stamp = new Date().toLocaleTimeString();
-  $("devHist").textContent = history
-    .map((item) => stamp + "  " + item.method + " " + item.path + " → " + item.status + " · " + item.ms + "ms")
+  cache("history").textContent = history
+    .map((item, index) => {
+      const when = new Date().toLocaleTimeString();
+      return (index === 0 ? "▸ " : "  ") + when + "  " + item.method + " " + item.path +
+        "  →  " + item.status + "  (" + item.ms + "ms)";
+    })
     .join("\n");
 
-  recordSession(entry.label || entry.method + " " + entry.path, entry.status);
+  cache("explainText").textContent = explain(entry.status, entry.respBody);
+  countSession(entry.label || entry.method + " " + entry.path, entry.status);
 }
 
-const ctx = {
-  get token() { return token; },
-  set token(value) { token = value; },
-  trace,
-  onHttpError: (status, body) => toast(status + " " + body)
-};
+function countSession(label, status) {
+  if (!label) return;
+  const bucket = status >= 200 && status < 300 ? "ok" : status >= 400 && status < 500 ? "c4" : "c5";
+  const row = session.get(label) || { ok: 0, c4: 0, c5: 0 };
+  row[bucket] += 1;
+  session.set(label, row);
+  renderSession();
+}
 
-/* ---------------- button helper (loading state) ---------------- */
+function renderSession() {
+  const body = cache("sessionBody");
+  if (!session.size) {
+    body.innerHTML = '<tr><td colspan="5">—</td></tr>';
+    return;
+  }
+  const rows = [...session.keys()].sort().map((label) => {
+    const counts = session.get(label);
+    const total = counts.ok + counts.c4 + counts.c5;
+    return "<tr><td>" + escapeHtml(label) + "</td><td>" + counts.ok + "</td><td>" + counts.c4 +
+      "</td><td>" + counts.c5 + "</td><td>" + total + "</td></tr>";
+  });
+  body.innerHTML = rows.join("");
+}
 
-async function withButton(button, action) {
-  if (button.disabled) return;
-  button.disabled = true;
-  const label = button.textContent;
-  button.textContent = "…";
+function escapeHtml(value) {
+  return String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/* ------------------------------------------------------------------ *
+ * Busy button helper
+ * ------------------------------------------------------------------ */
+
+async function busy(button, action) {
+  if (button.dataset.busy === "1") return;
+  button.dataset.busy = "1";
   button.setAttribute("aria-busy", "true");
   try {
     await action();
   } catch (error) {
-    toast("network error: " + error);
+    toast(I18N[lang].networkError + ": " + error, "fail");
   } finally {
-    button.disabled = false;
-    button.textContent = label;
+    delete button.dataset.busy;
     button.removeAttribute("aria-busy");
   }
 }
 
-/* ---------------- 💾 save / fetch / delete ---------------- */
+/* ------------------------------------------------------------------ *
+ * KV
+ * ------------------------------------------------------------------ */
 
-const kvValues = () => ({
-  key: $("kvKey").value.trim(),
-  value: $("kvVal").value
-});
+function kvFields() {
+  return { key: cache("kvKey").value.trim(), value: cache("kvValue").value };
+}
 
-async function kvSave(button) {
-  const values = kvValues();
-  const path = "/api/kv/" + encodeURIComponent(values.key);
-  const result = await callJson(ctx, "PUT", path, { value: values.value }, { label: "PUT /api/kv/:key" });
+async function kvSave() {
+  const { key, value } = kvFields();
+  const path = "/api/kv/" + encodeURIComponent(key);
+  const result = await callJson(ctx, "PUT", path, { value }, { label: "PUT /api/kv/:key" });
   const ok = result.status >= 200 && result.status < 300;
-  showResult("kvResult", "kvTech", ok ? MSGS[LANG].saved(values.key, values.value) : MSGS[LANG].err400(),
-    ok, techLine("PUT", path, result));
-  refreshHealth(true);
+  paint("kvOut", ok ? MSGS[lang].saved(key, value) : MSGS[lang].badRequest, ok, line("PUT", path, result));
+  refreshStats(true);
 }
 
-async function kvFetch(button) {
-  const values = kvValues();
-  const path = "/api/kv/" + encodeURIComponent(values.key);
+async function kvFetch() {
+  const { key } = kvFields();
+  const path = "/api/kv/" + encodeURIComponent(key);
   const result = await callJson(ctx, "GET", path, undefined, { label: "GET /api/kv/:key" });
-  let human = MSGS[LANG].err404();
+  let human = MSGS[lang].notFound();
   if (result.status === 200) {
-    try { human = MSGS[LANG].fetched(JSON.parse(result.body).value); }
-    catch (e) { human = MSGS[LANG].fetched(result.body); }
+    try { human = MSGS[lang].fetched(JSON.parse(result.body).value); }
+    catch (e) { human = MSGS[lang].fetched(result.body); }
   }
-  showResult("kvResult", "kvTech", human, result.status === 200, techLine("GET", path, result));
+  paint("kvOut", human, result.status === 200, line("GET", path, result));
 }
 
-async function kvDelete(button) {
-  const values = kvValues();
-  if (!confirm(I18N[LANG].confirmDeleteKv + " " + values.key + "?")) return;
-  const path = "/api/kv/" + encodeURIComponent(values.key);
+async function kvDelete() {
+  const { key } = kvFields();
+  if (!window.confirm(I18N[lang].confirmKv + " " + key + "?")) return;
+  const path = "/api/kv/" + encodeURIComponent(key);
   const result = await callJson(ctx, "DELETE", path, undefined, { label: "DELETE /api/kv/:key" });
   const ok = result.status === 204;
-  showResult("kvResult", "kvTech", ok ? MSGS[LANG].deleted() : MSGS[LANG].err404(), ok,
-    techLine("DELETE", path, result));
-  refreshHealth(true);
+  paint("kvOut", ok ? MSGS[lang].deleted() : MSGS[lang].notFound(), ok, line("DELETE", path, result));
+  refreshStats(true);
 }
 
-/* ---------------- 📝 notes ---------------- */
+/* ------------------------------------------------------------------ *
+ * Notes
+ * ------------------------------------------------------------------ */
 
-const noteValues = () => ({ title: $("nTitle").value, body: $("nBody").value });
+function noteFields() {
+  return {
+    title: cache("noteTitleValue").value,
+    body: cache("noteBodyValue").value
+  };
+}
 
-function renderNoteCards(items) {
-  const host = $("notesLive");
+function renderNotes(items) {
+  const host = cache("noteList");
   host.textContent = "";
   items.forEach((note) => {
-    const card = document.createElement("div");
-    card.className = "notecard";
+    const row = document.createElement("div");
+    row.className = "item";
 
-    const title = document.createElement("b");
-    title.textContent = "#" + note.id + " " + note.title;
+    const body = document.createElement("div");
+    body.className = "item-body";
 
-    const body = document.createElement("p");
-    body.textContent = note.body;
+    const title = document.createElement("div");
+    title.className = "item-title";
+    const id = document.createElement("span");
+    id.className = "item-id";
+    id.textContent = "#" + note.id;
+    const text = document.createElement("span");
+    text.textContent = note.title;
+    title.append(id, text);
 
-    const ops = document.createElement("div");
-    ops.className = "ops";
+    const content = document.createElement("p");
+    content.className = "item-text";
+    content.textContent = note.body;
+
+    body.append(title, content);
+
+    const tools = document.createElement("div");
+    tools.className = "item-actions";
 
     const edit = document.createElement("button");
-    edit.className = "ghost";
-    edit.textContent = I18N[LANG].editNote;
-    edit.setAttribute("aria-label", I18N[LANG].editNote + " " + note.id);
+    edit.className = "icon-btn";
+    edit.type = "button";
+    edit.textContent = "✎";
+    edit.title = I18N[lang].editNote;
+    edit.setAttribute("aria-label", I18N[lang].editNote + " " + note.id);
     edit.addEventListener("click", () => {
-      $("nTitle").value = note.title;
-      $("nBody").value = note.body;
+      cache("noteTitleValue").value = note.title;
+      cache("noteBodyValue").value = note.body;
       noteUpdate(note.id);
     });
 
     const remove = document.createElement("button");
-    remove.className = "ghost";
-    remove.textContent = I18N[LANG].deleteNote;
-    remove.setAttribute("aria-label", I18N[LANG].deleteNote + " " + note.id);
+    remove.className = "icon-btn is-danger";
+    remove.type = "button";
+    remove.textContent = "✕";
+    remove.title = I18N[lang].deleteNote;
+    remove.setAttribute("aria-label", I18N[lang].deleteNote + " " + note.id);
     remove.addEventListener("click", () => noteDelete(note.id));
 
-    ops.appendChild(edit);
-    ops.appendChild(remove);
-    card.appendChild(title);
-    card.appendChild(body);
-    card.appendChild(ops);
-    host.appendChild(card);
+    tools.append(edit, remove);
+    row.append(body, tools);
+    host.appendChild(row);
   });
 }
 
-async function noteCreate(button) {
-  const values = noteValues();
-  const result = await callJson(ctx, "POST", "/api/notes", { title: values.title, body: values.body },
-    { label: "POST /api/notes" });
-  let human = MSGS[LANG].err400();
+async function noteCreate() {
+  const { title, body } = noteFields();
+  const result = await callJson(ctx, "POST", "/api/notes", { title, body }, { label: "POST /api/notes" });
+  let human = MSGS[lang].badRequest();
   if (result.status === 201) {
-    try { human = MSGS[LANG].noteMade(JSON.parse(result.body).id); }
-    catch (e) { human = MSGS[LANG].noteMade("?"); }
+    try { human = MSGS[lang].noteCreated(JSON.parse(result.body).id); }
+    catch (e) { human = MSGS[lang].noteCreated("?"); }
   }
-  showResult("nResult", "nTech", human, result.status === 201, techLine("POST", "/api/notes", result));
-  refreshHealth(true);
+  paint("noteOut", human, result.status === 201, line("POST", "/api/notes", result));
+  refreshStats(true);
   noteList();
 }
 
-async function noteList(button) {
+async function noteList() {
   const path = "/api/notes?limit=50";
   const result = await callJson(ctx, "GET", path, undefined, { label: "GET /api/notes" });
-  let human = MSGS[LANG].err400();
-  let items = [];
-  if (result.status === 200) {
-    try {
-      const parsed = JSON.parse(result.body);
-      items = parsed.items || [];
-      human = MSGS[LANG].notesListed(parsed.total !== undefined ? parsed.total : items.length);
-    } catch (e) { human = MSGS[LANG].err400(); }
+  if (result.status !== 200) {
+    paint("noteOut", MSGS[lang].badRequest(), false, line("GET", path, result));
+    renderNotes([]);
+    return;
   }
-  showResult("nResult", "nTech", human, result.status === 200, techLine("GET", path, result));
-  renderNoteCards(items);
+  let items = [];
+  let total = 0;
+  try {
+    const parsed = JSON.parse(result.body);
+    items = parsed.items || [];
+    total = parsed.total !== undefined ? parsed.total : items.length;
+  } catch (e) { /* fall through to empty */ }
+  paint("noteOut", MSGS[lang].notesListed(total), true, line("GET", path, result));
+  renderNotes(items);
 }
 
 async function noteUpdate(id) {
-  const values = noteValues();
+  const { title, body } = noteFields();
   const path = "/api/notes/" + id;
-  const result = await callJson(ctx, "PUT", path, { title: values.title, body: values.body },
-    { label: "PUT /api/notes/:id" });
+  const result = await callJson(ctx, "PUT", path, { title, body }, { label: "PUT /api/notes/:id" });
   const ok = result.status === 200;
-  showResult("nResult", "nTech", ok ? MSGS[LANG].noteUpdated(id) : MSGS[LANG].err404(), ok,
-    techLine("PUT", path, result));
-  refreshHealth(true);
+  paint("noteOut", ok ? MSGS[lang].noteUpdated(id) : MSGS[lang].notFound(), ok, line("PUT", path, result));
+  refreshStats(true);
   noteList();
 }
 
 async function noteDelete(id) {
-  if (!confirm(I18N[LANG].confirmDeleteNote + " " + id + "?")) return;
+  if (!window.confirm(I18N[lang].confirmNote + " " + id + "?")) return;
   const path = "/api/notes/" + id;
   const result = await callJson(ctx, "DELETE", path, undefined, { label: "DELETE /api/notes/:id" });
   const ok = result.status === 204;
-  showResult("nResult", "nTech", ok ? MSGS[LANG].noteGone(id) : MSGS[LANG].err404(), ok,
-    techLine("DELETE", path, result));
-  refreshHealth(true);
+  paint("noteOut", ok ? MSGS[lang].noteDeleted(id) : MSGS[lang].notFound(), ok, line("DELETE", path, result));
+  refreshStats(true);
   noteList();
 }
 
-/* ---------------- 🔐 vault ---------------- */
+/* ------------------------------------------------------------------ *
+ * Vault
+ * ------------------------------------------------------------------ */
 
-function rememberPassword() {
-  token = $("apiPass").value;
+const ctx = {
+  get token() { return token; },
+  trace,
+  onHttpError: (status, body) => toast(status + " · " + body, "fail")
+};
+
+function renderAuthBadge() {
+  const badge = cache("authBadge");
+  badge.textContent = protectedMode ? I18N[lang].modeProtected : I18N[lang].modeOpen;
+  badge.dataset.tone = protectedMode ? "warn" : "ok";
+
+  const notice = cache("authNotice");
+  notice.hidden = protectedMode;
+  notice.textContent = I18N[lang].authOpenNotice;
+}
+
+async function authGood() {
+  token = cache("authToken").value;
   saveToken(token);
-  return token;
-}
-
-function updateAuthNotice() {
-  const notice = $("authNotice");
-  if (serverOpen) {
-    notice.hidden = false;
-    notice.textContent = I18N[LANG].openNote;
-  } else {
-    notice.hidden = true;
-  }
-  const badge = $("authMode");
-  badge.textContent = serverOpen ? I18N[LANG].modeOpen : I18N[LANG].modeProtected;
-  badge.className = "badge " + (serverOpen ? "open" : "protected");
-}
-
-async function authGood(button) {
-  if (!rememberPassword()) { toast(I18N[LANG].typePassword); return; }
+  if (!token) { toast(I18N[lang].typePassword); return; }
   const path = "/api/kv/authtest";
   const result = await callJson(ctx, "PUT", path, { value: "ok" }, { label: "PUT /api/kv/:key (auth)" });
-  const human = result.status === 200
-    ? (serverOpen ? MSGS[LANG].authOpen() : MSGS[LANG].authOk())
-    : MSGS[LANG].authBad();
-  showResult("authResult", "authTech", human, result.status === 200,
-    techLine("PUT", path, result) + " · X-API-Key: ••••");
-  refreshHealth(true);
+  const ok = result.status === 200;
+  const human = ok ? (protectedMode ? MSGS[lang].authAccepted() : MSGS[lang].authOpenServer()) : MSGS[lang].authRejected();
+  paint("authOut", human, ok, line("PUT", path, result, "X-API-Key: ****"));
+  refreshStats(true);
 }
 
-async function authWrong(button) {
+async function authWrong() {
   const raw = JSON.stringify({ value: "ok" });
-  const headers = { "Content-Type": "application/json", "X-API-Key": I18N[LANG].wrongKey };
+  const headers = { "Content-Type": "application/json", "X-API-Key": I18N[lang].wrongKey };
   const result = await doFetch("PUT", "/api/kv/authtest", raw, headers);
-  trace({ method: "PUT", path: "/api/kv/authtest", reqBody: raw, headers, status: result.status,
+  trace({ method: "PUT", path: "/api/kv/authtest", reqBody: raw, status: result.status,
     ms: result.ms, bytes: result.bytes, respBody: result.text, label: "PUT /api/kv/:key (wrong key)" });
-  const human = result.status === 403 ? MSGS[LANG].authBad() : MSGS[LANG].authOpen();
-  showResult("authResult", "authTech", human, result.status === 403,
-    techLine("PUT", "/api/kv/authtest", result) + " · X-API-Key: " + I18N[LANG].wrongKey);
-  refreshHealth(true);
+  const denied = result.status === 403;
+  paint("authOut", denied ? MSGS[lang].authRejected() : MSGS[lang].authOpenServer(), denied,
+    line("PUT", "/api/kv/authtest", result, "X-API-Key: wrong"));
+  refreshStats(true);
 }
 
-async function authNone(button) {
-  rememberPassword();
+async function authNone() {
   const path = "/api/kv/authtest";
   const result = await callJson(ctx, "PUT", path, { value: "ok" },
     { noAuth: true, label: "PUT /api/kv/:key (no key)" });
-  const human = result.status === 401 ? MSGS[LANG].authNone() : MSGS[LANG].authOpen();
-  showResult("authResult", "authTech", human, result.status === 401 || (serverOpen && result.status === 200),
-    techLine("PUT", path, result) + " · no key sent");
-  refreshHealth(true);
+  const denied = result.status === 401;
+  paint("authOut", denied ? MSGS[lang].authMissing() : MSGS[lang].authOpenServer(),
+    denied || result.status === 200, line("PUT", path, result, "no key sent"));
+  refreshStats(true);
 }
 
-function forgetPassword() {
+function authForget() {
   token = "";
-  $("apiPass").value = "";
+  cache("authToken").value = "";
   forgetToken();
-  toast(I18N[LANG].tokenForgotten, true);
+  toast(I18N[lang].tokenForgotten, "ok");
 }
 
-/* ---------------- 📡 echo ---------------- */
+/* ------------------------------------------------------------------ *
+ * Echo
+ * ------------------------------------------------------------------ */
 
-async function echoSend(button) {
-  const text = $("echoIn").value;
+async function echoSend() {
+  const text = cache("echoInput").value;
   const result = await callJson(ctx, "POST", "/api/echo", { data: text }, { label: "POST /api/echo" });
-  let human = MSGS[LANG].err400();
+  let human = MSGS[lang].badRequest();
   if (result.status === 200) {
-    try { human = MSGS[LANG].echoGot(text, JSON.parse(result.body).data); }
-    catch (e) { human = MSGS[LANG].echoGot(text, result.body); }
+    try { human = MSGS[lang].echoRoundTrip(text, JSON.parse(result.body).data); }
+    catch (e) { human = MSGS[lang].echoRoundTrip(text, result.body); }
   }
-  showResult("echoResult", "echoTech", human, result.status === 200, techLine("POST", "/api/echo", result));
+  paint("echoOut", human, result.status === 200, line("POST", "/api/echo", result));
 }
 
-/* ---------------- 💥 error gallery ---------------- */
+/* ------------------------------------------------------------------ *
+ * Error gallery
+ * ------------------------------------------------------------------ */
 
-async function errMissing() {
-  const result = await callJson(ctx, "PUT", "/api/kv/demo", { nope: 1 }, { label: "PUT /api/kv/:key (missing field)" });
-  showResult("errResult", "errTech", MSGS[LANG].err400(), false, techLine("PUT", "/api/kv/demo", result));
+async function runProbe(kind) {
+  const specs = {
+    errMissing: ["GET", "/api/kv/never-saved", undefined, "GET /api/kv/:key (missing)"],
+    errBadId: ["GET", "/api/notes/abc", undefined, "GET /api/notes/:id (bad id)"],
+    errMethod: ["POST", "/health", {}, "POST /health (method)"],
+    errPayload: ["PUT", "/api/kv/demo", { wrong: 1 }, "PUT /api/kv/:key (payload)"],
+    errTooBig: ["PUT", "/api/kv/big", { value: "x".repeat(70000) }, "PUT /api/kv/:key (oversized)"],
+    errRoute: ["GET", "/no-such-route", undefined, "GET /no-such-route"]
+  };
+  const [method, path, body, label] = specs[kind];
+  const result = await callJson(ctx, method, path, body, { label });
+  const human = {
+    400: MSGS[lang].badRequest(),
+    404: MSGS[lang].notFound(),
+    405: MSGS[lang].methodNotAllowed(),
+    413: MSGS[lang].tooLarge()
+  }[result.status] || MSGS[lang].internalError();
+  paint("errOut", human, false, line(method, path, result));
 }
 
-async function errBadId() {
-  const result = await callJson(ctx, "GET", "/api/notes/abc", undefined, { label: "GET /api/notes/:id (bad id)" });
-  showResult("errResult", "errTech", MSGS[LANG].err400(), false, techLine("GET", "/api/notes/abc", result));
-}
+/* ------------------------------------------------------------------ *
+ * Performance
+ * ------------------------------------------------------------------ */
 
-async function errWrongMethod() {
-  const result = await callJson(ctx, "POST", "/health", {}, { label: "POST /health (method)" });
-  showResult("errResult", "errTech", MSGS[LANG].err405(), false, techLine("POST", "/health", result));
-}
-
-async function errTooBig() {
-  const result = await callJson(ctx, "PUT", "/api/kv/big", { value: "x".repeat(70000) },
-    { label: "PUT /api/kv/:key (oversized)" });
-  showResult("errResult", "errTech", MSGS[LANG].err413(), false, techLine("PUT", "/api/kv/big", result));
-}
-
-async function errUnknownRoute() {
-  const result = await callJson(ctx, "GET", "/lugar-nenhum", undefined, { label: "GET /unknown (route)" });
-  showResult("errResult", "errTech", MSGS[LANG].err404(), false, techLine("GET", "/lugar-nenhum", result));
-}
-
-async function errMissingValue() {
-  const result = await callJson(ctx, "GET", "/api/kv/nunca-existiu", undefined,
-    { label: "GET /api/kv/:key (missing value)" });
-  showResult("errResult", "errTech", MSGS[LANG].err404(), false,
-    techLine("GET", "/api/kv/nunca-existiu", result));
-}
-
-async function errWrongKey() {
-  const raw = JSON.stringify({ value: "ok" });
-  const headers = { "Content-Type": "application/json", "X-API-Key": I18N[LANG].wrongKey };
-  const result = await doFetch("PUT", "/api/kv/authtest", raw, headers);
-  trace({ method: "PUT", path: "/api/kv/authtest", reqBody: raw, headers, status: result.status,
-    ms: result.ms, bytes: result.bytes, respBody: result.text, label: "PUT /api/kv/:key (wrong key)" });
-  const human = result.status === 403 ? MSGS[LANG].err403() : MSGS[LANG].authOpen();
-  showResult("errResult", "errTech", human, false, techLine("PUT", "/api/kv/authtest", result));
-}
-
-/* ---------------- ⚡ performance ---------------- */
-
-function selectPerfCount(count) {
+function selectPerf(count) {
   perfCount = count;
   document.querySelectorAll("[data-perf]").forEach((btn) => {
-    const value = parseInt(btn.getAttribute("data-perf"), 10);
-    btn.setAttribute("aria-pressed", value === count ? "true" : "false");
+    btn.setAttribute("aria-pressed", Number(btn.getAttribute("data-perf")) === count ? "true" : "false");
   });
 }
 
-async function runPerf(button) {
+async function perfRun() {
   const count = perfCount;
   const started = performance.now();
-  const results = await Promise.all(Array.from({ length: count }, () =>
-    fetch("/health").then((r) => ({ ok: r.ok })).catch(() => ({ ok: false }))));
+  const results = await Promise.all(
+    Array.from({ length: count }, () => fetch("/health").then((r) => r.ok).catch(() => false))
+  );
   const total = Math.round(performance.now() - started);
-  const errors = results.filter((item) => !item.ok).length;
+  const failed = results.filter((ok) => !ok).length;
   const average = (total / count).toFixed(1);
 
-  showResult("perfResult", "perfTech", MSGS[LANG].perf(count, errors, total, average), errors === 0,
-    count + "× GET /health · " + total + "ms total · " + average + "ms avg");
-  for (let i = 0; i < count; i++) recordSession("GET /health (perf)", i < count - errors ? 200 : 500);
-  trace({ method: "GET", path: "/health ×" + count, reqBody: "", status: errors === 0 ? 200 : 500,
-    ms: total, bytes: 0, respBody: MSGS[LANG].perf(count, errors, total, average),
+  paint("perfOut", MSGS[lang].perf(count, failed, total, average), failed === 0,
+    count + "x GET /health  →  HTTP 200 x" + (count - failed) + "  ·  " + total + "ms total  ·  " + average + "ms avg");
+
+  for (let i = 0; i < count; i++) {
+    countSession("GET /health (perf)", i < count - failed ? 200 : 500);
+  }
+  trace({ method: "GET", path: "/health x" + count, reqBody: "", status: failed === 0 ? 200 : 500,
+    ms: total, bytes: 0, respBody: MSGS[lang].perf(count, failed, total, average),
     label: "GET /health (perf)" });
-  refreshHealth(true);
+  refreshStats(true);
 }
 
-/* ---------------- 🛠 tech mode ---------------- */
+/* ------------------------------------------------------------------ *
+ * Tech drawer
+ * ------------------------------------------------------------------ */
+
+async function rawRun() {
+  const method = cache("rawMethod").value;
+  const path = cache("rawPath").value.trim() || "/";
+  let headers;
+  try {
+    headers = parseHeaders(cache("rawHeaders").value);
+  } catch (error) {
+    toast(I18N[lang].badHeader + ": " + error.message, "fail");
+    return;
+  }
+  const raw = cache("rawBody").value;
+  if (raw && !headers["Content-Type"] && !headers["content-type"]) {
+    headers["Content-Type"] = "application/json";
+  }
+  const result = await doFetch(method, path, raw, headers);
+  trace({ method, path, reqBody: raw, status: result.status, ms: result.ms,
+    bytes: result.bytes, respBody: result.text, label: method + " " + path + " (raw)" });
+  const ok = result.status >= 200 && result.status < 300;
+  toast(line(method, path, result), ok ? "ok" : "fail");
+}
 
 function copyCurl() {
-  if (!lastEntry) { toast(I18N[LANG].nothingToCopy); return; }
-  const command = buildCurl(lastEntry.method, lastEntry.path, lastEntry.headers, lastEntry.reqBody);
-  const done = () => toast(I18N[LANG].copied, true);
+  if (!lastCall) { toast(I18N[lang].nothingToCopy); return; }
+  const command = buildCurl(lastCall.method, lastCall.path, lastCall.headers, lastCall.reqBody);
+  const done = () => toast(I18N[lang].copied, "ok");
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(command).then(done, () => toast(command));
   } else {
@@ -448,37 +509,18 @@ function copyCurl() {
   }
 }
 
-function clearHistory() {
+function clearStream() {
   history.length = 0;
-  $("devHist").textContent = "—";
+  session.clear();
+  cache("history").textContent = "";
+  cache("lastCall").textContent = "";
+  renderSession();
 }
 
-async function composerRun(button) {
-  const method = $("cMethod").value;
-  const path = $("cPath").value.trim() || "/";
-  let headers;
-  try {
-    headers = parseHeaders($("cHeaders").value);
-  } catch (error) {
-    toast("400 local: " + error.message);
-    return;
-  }
-  const raw = $("cBody").value;
-  if (raw && !headers["Content-Type"] && !headers["content-type"]) headers["Content-Type"] = "application/json";
-  const result = await doFetch(method, path, raw, headers);
-  trace({ method, path, reqBody: raw, headers, status: result.status, ms: result.ms,
-    bytes: result.bytes, respBody: result.text, label: method + " " + path + " (composer)" });
-  if (result.status < 200 || result.status >= 300) toast(result.status + " " + result.text.slice(0, 200));
-  else toast(result.status + " · " + result.ms + "ms · " + result.bytes + " bytes", true);
-}
+/* ------------------------------------------------------------------ *
+ * Language comparison
+ * ------------------------------------------------------------------ */
 
-/* ---------------- 🌎 language comparison ---------------- */
-
-function escapeCode(code) {
-  return code.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-}
-
-/* Lightweight syntax highlighting: one pass, escaped per token, never twice. */
 const KEYWORDS = {
   c: "auto break case const continue default do else enum extern for goto if inline int long register return short signed sizeof static struct switch typedef union unsigned void volatile while",
   python: "and as assert async await break class continue def del elif else except False finally for from global if import in is lambda None nonlocal not or pass raise return True try while with yield",
@@ -491,74 +533,76 @@ const API_TOKENS = {
   c: "API_OK API_ERR_INTERNAL API_ERR_NOT_FOUND API_ERR_UNAUTHORIZED API_ERR_FORBIDDEN SQLITE_TRANSIENT SQLITE_DONE SQLITE_ROW sqlite3_prepare_v2 sqlite3_bind_text sqlite3_bind_int64 sqlite3_step sqlite3_finalize sqlite3_column_text sqlite3_changes sqlite3_last_insert_rowid server_send_all"
 };
 
-function highlight(code, lang) {
-  const keywords = new Set((KEYWORDS[lang] || "").split(/\s+/).filter(Boolean));
-  const api = new Set((API_TOKENS[lang] || "").split(/\s+/).filter(Boolean));
+function highlight(code, language) {
+  const keywords = new Set((KEYWORDS[language] || "").split(/\s+/).filter(Boolean));
+  const api = new Set((API_TOKENS[language] || "").split(/\s+/).filter(Boolean));
   const pattern = /(\/\*[\s\S]*?\*\/|\/\/[^\n]*|"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\b\d+(?:\.\d+)?\b|[A-Za-z_][A-Za-z0-9_]*)/g;
   let out = "";
   let last = 0;
   let match;
+
   while ((match = pattern.exec(code)) !== null) {
-    out += escapeCode(code.slice(last, match.index));
+    out += escapeHtml(code.slice(last, match.index));
     const token = match[0];
     const after = code.slice(pattern.lastIndex, pattern.lastIndex + 1);
     if (token.indexOf("/*") === 0 || token.indexOf("//") === 0) {
-      out += '<span class="tok-com">' + escapeCode(token) + "</span>";
+      out += '<span class="tok-com">' + escapeHtml(token) + "</span>";
     } else if (token[0] === '"' || token[0] === "'") {
-      out += '<span class="tok-str">' + escapeCode(token) + "</span>";
+      out += '<span class="tok-str">' + escapeHtml(token) + "</span>";
     } else if (/^\d/.test(token)) {
-      out += '<span class="tok-num">' + escapeCode(token) + "</span>";
+      out += '<span class="tok-num">' + escapeHtml(token) + "</span>";
     } else if (keywords.has(token)) {
-      out += '<span class="tok-kw">' + escapeCode(token) + "</span>";
+      out += '<span class="tok-kw">' + escapeHtml(token) + "</span>";
     } else if (api.has(token)) {
-      out += '<span class="tok-api">' + escapeCode(token) + "</span>";
+      out += '<span class="tok-api">' + escapeHtml(token) + "</span>";
     } else if (after === "(") {
-      out += '<span class="tok-fn">' + escapeCode(token) + "</span>";
+      out += '<span class="tok-fn">' + escapeHtml(token) + "</span>";
     } else {
-      out += escapeCode(token);
+      out += escapeHtml(token);
     }
     last = pattern.lastIndex;
   }
-  out += escapeCode(code.slice(last));
+  out += escapeHtml(code.slice(last));
   return out;
 }
 
-function comparePane(lang, entry, tagText, tagClass, variant) {
-  return '<div class="cmppane ' + variant + '">' +
-    '<div class="cmp-head"><h4>' + IMPLNAME[lang] + "</h4>" +
+function codePanel(language, entry, tagText, tagTone, variant) {
+  return '<article class="code-panel" data-' + variant + '="true">' +
+    '<header class="code-head"><strong>' + IMPLNAME[language] + "</strong>" +
     '<span class="spacer"></span>' +
-    '<button class="copy" data-copy="' + lang + '" title="Copy code">⧉ copy</button></div>' +
-    '<div class="cmp-meta"><span class="chip">≈ ' + entry.loc + " loc</span>" +
-    '<span class="chip">via ' + escapeCode(entry.lib) + "</span>" +
-    '<span class="tag ' + tagClass + '">' + tagText + "</span></div>" +
-    "<pre><code>" + highlight(entry.code, lang) + "</code></pre></div>";
+    '<button class="copy-btn" data-copy="' + language + '">copy</button></header>' +
+    '<div class="code-meta"><span class="chip">≈ ' + entry.loc + " loc</span>" +
+    '<span class="chip">' + escapeHtml(entry.lib) + "</span>" +
+    '<span class="chip" data-tone="' + tagTone + '">' + tagText + "</span></div>" +
+    "<pre><code>" + highlight(entry.code, language) + "</code></pre></article>";
 }
 
 function renderCompare(host) {
   const key = host.getAttribute("data-fn");
   const data = CMP[key];
   if (!data) return;
-  if (!host._sel) host._sel = "c";
-  const selected = host._sel;
-  const dict = I18N[LANG];
+  if (!host._selected) host._selected = "c";
+  const selected = host._selected;
+  const dict = I18N[lang];
 
-  let html = '<div class="cmptabs" role="group" aria-label="' + dict.cmpAria + '">';
-  IMPL.forEach((lang) => {
-    const active = lang === selected;
-    html += '<button class="' + (active ? "active" : "") + '" data-impl-tab="' + lang + '"' +
-      ' aria-pressed="' + (active ? "true" : "false") + '">' + IMPLNAME[lang] + "</button>";
+  const tabs = ['<div class="tabs" role="group" aria-label="' + escapeHtml(dict.implAria) + '">'];
+  IMPL.forEach((language) => {
+    tabs.push('<button data-tab="' + language + '" aria-pressed="' +
+      (language === selected ? "true" : "false") + '">' + IMPLNAME[language] + "</button>");
   });
-  html += '</div><div class="cmpgrid' + (selected !== "c" ? " side" : "") + '">';
-  html += comparePane("c", data.c, dict.realTag, "real", " is-reference");
-  if (selected !== "c") {
-    html += comparePane(selected, data[selected], dict.demoTag, "demo", " is-candidate");
-  }
-  html += "</div>";
-  host.innerHTML = html;
+  tabs.push("</div>");
 
-  host.querySelectorAll("[data-impl-tab]").forEach((btn) => {
+  const side = selected !== "c";
+  const panels = ['<div class="code-grid" data-side="' + side + '">'];
+  panels.push(codePanel("c", data.c, dict.realTag, "ok", "ref"));
+  if (side) panels.push(codePanel(selected, data[selected], dict.demoTag, "demo", "cand"));
+  panels.push("</div>");
+
+  host.innerHTML = tabs.join("") + panels.join("");
+
+  host.querySelectorAll("[data-tab]").forEach((btn) => {
     btn.addEventListener("click", () => {
-      host._sel = btn.getAttribute("data-impl-tab");
+      host._selected = btn.getAttribute("data-tab");
       renderCompare(host);
     });
   });
@@ -566,120 +610,126 @@ function renderCompare(host) {
     btn.addEventListener("click", () => {
       const code = data[btn.getAttribute("data-copy")].code;
       if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(code).then(() => toast(dict.copied, true), () => toast(code.slice(0, 120)));
+        navigator.clipboard.writeText(code).then(() => toast(dict.copied, "ok"), () => toast(code.slice(0, 140)));
       } else {
-        toast(code.slice(0, 120));
+        toast(code.slice(0, 140));
       }
     });
   });
 }
 
-function renderImplMatrix() {
-  $("langNote").textContent = LANGNOTES[LANG][currentImpl];
-  document.querySelectorAll("#langBtns2 button").forEach((btn) => {
-    const active = btn.getAttribute("data-impl") === currentImpl;
-    btn.classList.toggle("ghost", !active);
-    btn.classList.toggle("act", active);
-    btn.setAttribute("aria-pressed", active ? "true" : "false");
-  });
+function renderMatrix() {
   const active = IMPL.indexOf(currentImpl);
-  const rows = PIECES.map((piece) => {
+  cache("matrixBody").innerHTML = PIECES.map((piece) => {
     const cells = piece[1].map((value, index) =>
-      "<td" + (index === active ? ' class="col-active"' : "") + ">" + escapeCode(value) + "</td>").join("");
-    return "<tr><td>" + PIECE_L[LANG][piece[0]] + "</td>" + cells + "</tr>";
+      "<td" + (index === active ? ' class="on"' : "") + ">" + escapeHtml(value) + "</td>").join("");
+    return "<tr><td>" + PIECE_L[lang][piece[0]] + "</td>" + cells + "</tr>";
+  }).join("");
+}
+
+function renderImplNote() {
+  cache("implNote").textContent = LANGNOTES[lang][currentImpl];
+  document.querySelectorAll("#implTabs button").forEach((btn) => {
+    btn.setAttribute("aria-pressed", btn.getAttribute("data-impl") === currentImpl ? "true" : "false");
   });
-  $("pieceBody").innerHTML = rows.join("");
 }
 
-function selectImpl(lang) {
-  currentImpl = lang;
-  renderImplMatrix();
+function selectImpl(language) {
+  currentImpl = language;
+  renderImplNote();
+  renderMatrix();
 }
 
-/* ---------------- health + metrics ---------------- */
+/* ------------------------------------------------------------------ *
+ * Health + metrics
+ * ------------------------------------------------------------------ */
 
-async function refreshHealth(silent) {
+async function refreshStats(silent) {
   try {
     const health = await callJson(ctx, "GET", "/health", undefined, { trace: !silent, label: "GET /health" });
     const metrics = await callJson(ctx, "GET", "/metrics", undefined, { trace: false, label: "GET /metrics" });
-    const healthData = JSON.parse(health.body);
-    const metricsData = JSON.parse(metrics.body);
+    const info = JSON.parse(health.body);
+    const stats = JSON.parse(metrics.body);
 
-    $("dot").className = "dot ok";
-    $("healthLine").textContent = "version " + healthData.version + " · uptime " + healthData.uptime_s + "s";
-    $("mReq").textContent = metricsData.http_requests;
-    $("mErr").textContent = metricsData.http_errors;
-    $("mKv").textContent = metricsData.kv_count;
-    $("mNotes").textContent = metricsData.notes_count;
-    $("mConn").textContent = metricsData.connections_accepted;
-    serverOpen = healthData.auth !== "protected";
-    updateAuthNotice();
+    cache("beacon").dataset.state = "online";
+    cache("healthLine").textContent = I18N[lang].online +
+      "  ·  v" + info.version + "  ·  uptime " + info.uptime_s + "s";
+
+    cache("mReq").textContent = stats.http_requests;
+    cache("mErr").textContent = stats.http_errors;
+    cache("mKv").textContent = stats.kv_count;
+    cache("mNotes").textContent = stats.notes_count;
+    cache("mConn").textContent = stats.connections_accepted;
+
+    protectedMode = info.auth === "protected";
+    renderAuthBadge();
   } catch (error) {
-    $("dot").className = "dot bad";
-    $("healthLine").textContent = I18N[LANG].unreachable + ": " + error;
+    cache("beacon").dataset.state = "offline";
+    cache("healthLine").textContent = I18N[lang].offline;
   }
 }
 
-/* ---------------- wiring ---------------- */
+/* ------------------------------------------------------------------ *
+ * Wiring
+ * ------------------------------------------------------------------ */
+
+const actions = {
+  kvSave, kvFetch, kvDelete,
+  authGood, authWrong, authNone, authForget,
+  echoSend, perfRun, rawRun, copyCurl, clearStream
+};
+
+const noteHandlers = { noteCreate, noteList };
+const probes = { errMissing, errBadId, errMethod, errPayload, errTooBig, errRoute };
 
 function bind() {
   document.querySelectorAll("[data-action]").forEach((button) => {
     button.addEventListener("click", () => {
-      const action = button.getAttribute("data-action");
-      const handler = actions[action];
-      if (!handler) return;
-      withButton(button, () => handler(button));
+      const handler = actions[button.getAttribute("data-action")];
+      if (handler) busy(button, handler);
     });
   });
-  document.querySelectorAll("[data-note-action]").forEach((button) => {
+  document.querySelectorAll("[data-note]").forEach((button) => {
     button.addEventListener("click", () => {
-      const action = button.getAttribute("data-note-action");
-      const handler = noteActions[action];
-      if (!handler) return;
-      withButton(button, () => handler(button));
+      const handler = noteHandlers[button.getAttribute("data-note")];
+      if (handler) busy(button, handler);
     });
   });
   document.querySelectorAll("[data-err]").forEach((button) => {
-    button.addEventListener("click", () => withButton(button, () => errorActions[button.getAttribute("data-err")]()));
-  });
-  document.querySelectorAll("[data-perf]").forEach((button) => {
-    button.addEventListener("click", () => selectPerfCount(parseInt(button.getAttribute("data-perf"), 10)));
-  });
-  document.querySelectorAll("#langBtns button").forEach((button) => {
-    button.addEventListener("click", () => applyLanguage(button.getAttribute("data-lang")));
-  });
-  document.querySelectorAll("#langBtns2 button").forEach((button) => {
-    button.addEventListener("click", () => selectImpl(button.getAttribute("data-impl")));
-  });
-  document.querySelectorAll("details.cmp").forEach((details) => {
-    details.addEventListener("toggle", () => {
-      if (details.open && !details._done) {
-        details._done = true;
-        renderCompare(details.querySelector("[data-fn]"));
-      }
+    button.addEventListener("click", () => {
+      const handler = probes[button.getAttribute("data-err")];
+      if (handler) busy(button, handler);
     });
   });
-  $("apiPass").value = token || "demo";
-  $("healthLine").textContent = I18N[detectLang()].probing;
-  selectPerfCount(10);
+  document.querySelectorAll("[data-perf]").forEach((button) => {
+    button.addEventListener("click", () => selectPerf(Number(button.getAttribute("data-perf"))));
+  });
+  document.querySelectorAll("#langSwitch button").forEach((button) => {
+    button.addEventListener("click", () => applyLanguage(button.getAttribute("data-lang")));
+  });
+  document.querySelectorAll("#implTabs button").forEach((button) => {
+    button.addEventListener("click", () => selectImpl(button.getAttribute("data-impl")));
+  });
+  document.querySelectorAll("details").forEach((details) => {
+    const host = details.querySelector("[data-fn]");
+    if (!host) return;
+    details.addEventListener("toggle", () => {
+      if (details.open && !host._selected) renderCompare(host);
+    });
+  });
+
+  cache("authToken").value = token || I18N[lang].defaultToken;
+  selectPerf(10);
+  runId += 1;
+  document.body.dataset.run = String(runId);
 }
-
-const actions = {
-  kvSave, kvFetch, kvDelete, authGood, authWrong, authNone, echoSend, runPerf, composerRun,
-  copyCurl, clearHistory, forgetPassword
-};
-
-const noteActions = { noteCreate, noteList };
-
-const errorActions = {
-  errMissingValue, errWrongKey, errMissing, errWrongMethod, errTooBig, errUnknownRoute
-};
 
 function start() {
   bind();
-  applyLanguage(LANG);
-  refreshHealth(false);
-  setInterval(() => refreshHealth(true), 5000);
+  applyLanguage(lang);
+  renderImplNote();
+  refreshStats(false);
+  setInterval(() => refreshStats(true), 5000);
 }
 
 if (document.readyState === "loading") {
